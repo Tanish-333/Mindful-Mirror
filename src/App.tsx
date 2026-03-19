@@ -1,0 +1,1329 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp, 
+  orderBy, 
+  limit,
+  getDoc,
+  setDoc,
+  getDocFromServer,
+  writeBatch
+} from 'firebase/firestore';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  signOut, 
+  User,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
+} from 'firebase/auth';
+import { 
+  Book, 
+  Smile, 
+  CheckSquare, 
+  Sparkles, 
+  Settings, 
+  LayoutDashboard, 
+  Plus, 
+  Trash2, 
+  LogOut, 
+  Sun, 
+  Moon, 
+  ChevronRight, 
+  Calendar,
+  Save,
+  Clock,
+  Star,
+  Quote,
+  AlertCircle,
+  Mail,
+  Apple
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar 
+} from 'recharts';
+import Markdown from 'react-markdown';
+
+import { db, auth } from './firebase';
+import { JournalEntry, MoodLog, Task, UserPreference, SavedInspiration } from './types';
+import { getAIInsights, getDailyInspiration } from './services/gemini';
+import { Card, Button, cn } from './components/ui';
+
+// --- Error Handling ---
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: any[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// --- Error Boundary ---
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+          <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
+          <p className="text-[var(--muted-foreground)] mb-4">
+            {this.state.error?.message?.includes('{') 
+              ? "A database error occurred. Please try again later." 
+              : "An unexpected error occurred."}
+          </p>
+          <Button onClick={() => window.location.reload()}>Reload App</Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// --- Main App Component ---
+export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [moods, setMoods] = useState<MoodLog[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [preferences, setPreferences] = useState<UserPreference | null>(null);
+  const [savedInspirations, setSavedInspirations] = useState<SavedInspiration[]>([]);
+  const [dailyQuote, setDailyQuote] = useState<any>(null);
+  const [aiInsights, setAiInsights] = useState<any>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+
+  // --- Auth & Initial Setup ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
+    }
+    testConnection();
+  }, []);
+
+  // --- Theme Management ---
+  useEffect(() => {
+    if (preferences?.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [preferences?.theme]);
+
+  // --- Data Listeners ---
+  useEffect(() => {
+    if (!user || !isAuthReady) return;
+
+    const qEntries = query(collection(db, 'journalEntries'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const qMoods = query(collection(db, 'moodLogs'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const qTasks = query(collection(db, 'tasks'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const qPrefs = query(collection(db, 'userPreferences'), where('userId', '==', user.uid), limit(1));
+    const qSaved = query(collection(db, 'savedInspirations'), where('userId', '==', user.uid), orderBy('savedAt', 'desc'));
+
+    const unsubEntries = onSnapshot(qEntries, (snap) => {
+      setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() } as JournalEntry)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'journalEntries'));
+
+    const unsubMoods = onSnapshot(qMoods, (snap) => {
+      setMoods(snap.docs.map(d => ({ id: d.id, ...d.data() } as MoodLog)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'moodLogs'));
+
+    const unsubTasks = onSnapshot(qTasks, (snap) => {
+      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'tasks'));
+
+    const unsubPrefs = onSnapshot(qPrefs, (snap) => {
+      if (!snap.empty) {
+        setPreferences({ id: snap.docs[0].id, ...snap.docs[0].data() } as UserPreference);
+      } else {
+        // Create default preferences
+        const newPref: UserPreference = {
+          theme: 'light',
+          colorTheme: 'indigo',
+          notificationsEnabled: true,
+          userId: user.uid
+        };
+        addDoc(collection(db, 'userPreferences'), newPref).catch(err => handleFirestoreError(err, OperationType.CREATE, 'userPreferences'));
+      }
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'userPreferences'));
+
+    const unsubSaved = onSnapshot(qSaved, (snap) => {
+      setSavedInspirations(snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedInspiration)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'savedInspirations'));
+
+    return () => {
+      unsubEntries();
+      unsubMoods();
+      unsubTasks();
+      unsubPrefs();
+      unsubSaved();
+    };
+  }, [user, isAuthReady]);
+
+  // --- Daily Inspiration Fetch ---
+  useEffect(() => {
+    if (user) {
+      getDailyInspiration().then(setDailyQuote);
+    }
+  }, [user]);
+
+  // --- AI Insights Fetch ---
+  const fetchInsights = async () => {
+    if (!user || entries.length === 0) return;
+    setLoadingInsights(true);
+    const recentEntries = entries.slice(0, 5).map(e => e.content);
+    const recentMoods = moods.slice(0, 5).map(m => m.mood);
+    const insights = await getAIInsights(recentEntries, recentMoods);
+    setAiInsights(insights);
+    setLoadingInsights(false);
+  };
+
+  const handleLogin = async () => {
+    setLoginError(null);
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        setLoginError("The login window was closed before completion. Please try again.");
+      } else if (error.code === 'auth/cancelled-by-user') {
+        setLoginError("Login was cancelled. Please try again.");
+      } else if (error.code === 'auth/popup-blocked') {
+        setLoginError("The login popup was blocked by your browser. Please allow popups for this site.");
+      } else {
+        setLoginError("An unexpected error occurred during login. Please try again.");
+        console.error("Login failed:", error);
+      }
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    if (!email || !password) {
+      setLoginError("Please enter both email and password.");
+      return;
+    }
+    try {
+      if (isSigningUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (error: any) {
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        setLoginError("Invalid email or password.");
+      } else if (error.code === 'auth/email-already-in-use') {
+        setLoginError("This email is already in use.");
+      } else if (error.code === 'auth/weak-password') {
+        setLoginError("Password should be at least 6 characters.");
+      } else if (error.code === 'auth/invalid-email') {
+        setLoginError("Please enter a valid email address.");
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setLoginError("Email/Password login is not enabled. Please go to the Firebase Console -> Authentication -> Sign-in method and enable 'Email/Password'.");
+      } else {
+        setLoginError("Authentication failed. Please try again.");
+        console.error("Email auth failed:", error);
+      }
+    }
+  };
+
+  const handleLogout = () => setShowLogoutConfirm(true);
+  const confirmLogout = () => {
+    signOut(auth);
+    setShowLogoutConfirm(false);
+  };
+
+  if (!isAuthReady) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--background)] p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center max-w-md w-full"
+        >
+          <div className="w-16 h-16 bg-[var(--primary)] rounded-xl flex items-center justify-center mx-auto mb-8 shadow-sm">
+            <Sparkles className="w-8 h-8 text-[var(--primary-foreground)]" />
+          </div>
+          <h1 className="text-3xl font-bold mb-4 tracking-tight">Mindful Mirror</h1>
+          <p className="text-[var(--muted-foreground)] mb-10 text-lg leading-relaxed">
+            A minimalist sanctuary for daily reflection and personal growth.
+          </p>
+          
+          {loginError && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/30 flex items-center gap-3"
+            >
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <p className="text-left">{loginError}</p>
+            </motion.div>
+          )}
+          
+          <div className="space-y-6">
+            <form onSubmit={handleEmailAuth} className="space-y-4">
+              <div className="space-y-2 text-left">
+                <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="name@example.com"
+                  className="w-full bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 text-left">
+                <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  className="w-full bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+              </div>
+              <Button type="submit" className="w-full py-6 text-sm font-bold uppercase tracking-widest">
+                {isSigningUp ? 'Create Account' : 'Sign In'}
+              </Button>
+            </form>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-[var(--border)]"></span>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-[var(--background)] px-2 text-[var(--muted-foreground)] tracking-widest">Or continue with</span>
+              </div>
+            </div>
+
+            <Button variant="outline" onClick={handleLogin} className="w-full gap-3 py-6 text-sm font-bold uppercase tracking-widest">
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Google
+            </Button>
+            
+            <button 
+              onClick={() => setIsSigningUp(!isSigningUp)}
+              className="text-xs font-bold uppercase tracking-widest text-[var(--primary)] hover:underline"
+            >
+              {isSigningUp ? 'Already have an account? Sign In' : 'New here? Make Account'}
+            </button>
+          </div>
+
+          <p className="mt-8 text-xs text-[var(--muted-foreground)] uppercase tracking-widest">
+            Secure • Private • Minimal
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <div className="flex flex-col md:flex-row min-h-screen bg-[var(--background)]">
+        {/* Logout Confirmation Modal */}
+        <AnimatePresence>
+          {showLogoutConfirm && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm"
+              >
+                <Card className="p-8 text-center">
+                  <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <LogOut className="w-8 h-8" />
+                  </div>
+                  <h2 className="text-2xl font-bold mb-2 tracking-tight">Sign Out?</h2>
+                  <p className="text-[var(--muted-foreground)] mb-8">Are you sure you want to sign out of your account?</p>
+                  <div className="flex flex-col gap-3">
+                    <Button variant="danger" onClick={confirmLogout} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+                      Yes, Sign Out
+                    </Button>
+                    <Button variant="ghost" onClick={() => setShowLogoutConfirm(false)} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+                      Cancel
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        {/* Sidebar / Navigation */}
+        <nav className="fixed bottom-0 left-0 right-0 md:relative md:w-64 bg-[var(--card)] border-t md:border-t-0 md:border-r border-[var(--border)] z-50">
+          <div className="flex md:flex-col items-center md:items-stretch justify-around md:justify-start h-16 md:h-full p-2 md:p-4 gap-2">
+            <div className="hidden md:flex items-center gap-3 mb-8 px-2">
+              <div className="w-8 h-8 bg-[var(--primary)] rounded-lg flex items-center justify-center shadow-sm">
+                <Sparkles className="w-5 h-5 text-[var(--primary-foreground)]" />
+              </div>
+              <span className="font-bold text-xl tracking-tight">Mindful Mirror</span>
+            </div>
+            
+            <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard />} label="Dashboard" />
+            <NavButton active={activeTab === 'journal'} onClick={() => setActiveTab('journal')} icon={<Book />} label="Journal" />
+            <NavButton active={activeTab === 'mood'} onClick={() => setActiveTab('mood')} icon={<Smile />} label="Mood" />
+            <NavButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare />} label="Tasks" />
+            <NavButton active={activeTab === 'inspiration'} onClick={() => setActiveTab('inspiration')} icon={<Quote />} label="Inspiration" />
+            <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings />} label="Settings" />
+            
+            <div className="mt-auto hidden md:block">
+              <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3">
+                <LogOut className="w-5 h-5" />
+                Logout
+              </Button>
+            </div>
+          </div>
+        </nav>
+
+        {/* Main Content */}
+        <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {activeTab === 'dashboard' && <Dashboard entries={entries} moods={moods} tasks={tasks} quote={dailyQuote} insights={aiInsights} fetchInsights={fetchInsights} loadingInsights={loadingInsights} />}
+              {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} />}
+              {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} />}
+              {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} />}
+              {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} />}
+              {activeTab === 'settings' && <SettingsView preferences={preferences} onLogout={handleLogout} user={user} />}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+    </ErrorBoundary>
+  );
+}
+
+// --- Sub-Views ---
+
+function NavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all w-full",
+        active 
+          ? "bg-[var(--primary)] text-[var(--primary-foreground)] font-medium shadow-sm" 
+          : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+      )}
+    >
+      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" })}
+      <span className="text-[10px] md:text-sm font-medium">{label}</span>
+    </button>
+  );
+}
+
+function Dashboard({ entries, moods, tasks, quote, insights, fetchInsights, loadingInsights }: any) {
+  const moodData = moods.slice(0, 7).reverse().map((m: any) => ({
+    date: format(m.createdAt?.toDate() || new Date(), 'MMM d'),
+    mood: m.mood
+  }));
+
+  const completedTasks = tasks.filter((t: any) => t.completed).length;
+  const pendingTasks = tasks.length - completedTasks;
+
+  return (
+    <div className="space-y-8 max-w-6xl mx-auto">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight">Overview</h1>
+          <p className="text-[var(--muted-foreground)] mt-1">A summary of your recent wellness and productivity.</p>
+        </div>
+        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || entries.length === 0} className="gap-2">
+          <Sparkles className={cn("w-4 h-4", loadingInsights && "animate-spin")} />
+          {loadingInsights ? "Analyzing..." : "AI Analysis"}
+        </Button>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Daily Quote Card */}
+        <Card className="md:col-span-2 p-8 bg-[var(--primary)] text-[var(--primary-foreground)] border-none">
+          <div className="flex flex-col h-full justify-between">
+            <div>
+              <Quote className="w-8 h-8 opacity-20 mb-6" />
+              <p className="text-2xl md:text-3xl font-serif italic mb-6 leading-tight tracking-tight">
+                "{quote?.quote || "The best way to predict the future is to create it."}"
+              </p>
+              <p className="text-[var(--primary-foreground)] opacity-70 font-medium">— {quote?.author || "Peter Drucker"}</p>
+            </div>
+            <div className="mt-8 flex items-center gap-2 text-xs uppercase tracking-widest opacity-50">
+              <Star className="w-3 h-3 fill-current" />
+              <span>Daily Reflection</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Stats Card */}
+        <Card className="p-8">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-6 flex items-center gap-2">
+            <CheckSquare className="w-4 h-4" />
+            Productivity
+          </h3>
+          <div className="space-y-6">
+            <div className="flex justify-between items-baseline">
+              <div>
+                <p className="text-4xl font-bold">{completedTasks}</p>
+                <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider mt-1">Completed</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-[var(--muted-foreground)]">{pendingTasks}</p>
+                <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider mt-1">Pending</p>
+              </div>
+            </div>
+            <div className="h-1.5 bg-[var(--muted)] rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-[var(--primary)] transition-all duration-700 ease-out" 
+                style={{ width: `${tasks.length ? (completedTasks / tasks.length) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Mood Trends */}
+        <Card className="p-8">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-8 flex items-center gap-2">
+            <Smile className="w-4 h-4" />
+            Mood Trends
+          </h3>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={moodData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis 
+                  dataKey="date" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} 
+                />
+                <YAxis 
+                  domain={[1, 5]} 
+                  axisLine={false} 
+                  tickLine={false} 
+                  ticks={[1, 2, 3, 4, 5]}
+                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--card)', 
+                    borderColor: 'var(--border)', 
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="mood" 
+                  stroke="var(--primary)" 
+                  strokeWidth={2} 
+                  dot={{ r: 3, fill: 'var(--primary)', strokeWidth: 0 }}
+                  activeDot={{ r: 5, strokeWidth: 0 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* AI Insights Card */}
+        <Card className="p-8">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-6 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            AI Analysis
+          </h3>
+          {insights ? (
+            <div className="space-y-6">
+              <div className="p-5 bg-[var(--muted)] rounded-lg border border-[var(--border)]">
+                <p className="text-[10px] font-bold text-[var(--muted-foreground)] mb-3 uppercase tracking-widest">Reflection Prompt</p>
+                <p className="text-[var(--foreground)] italic font-medium leading-relaxed">"{insights.prompt}"</p>
+              </div>
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-widest">Recommendations</p>
+                <ul className="space-y-3">
+                  {insights.tips.map((tip: string, i: number) => (
+                    <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
+                      <div className="w-1 h-1 rounded-full bg-[var(--primary)] mt-2 shrink-0" />
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+              <Sparkles className="w-10 h-10 text-[var(--muted)] mb-4 opacity-50" />
+              <p className="text-sm text-[var(--muted-foreground)] max-w-[200px]">
+                {entries.length === 0 
+                  ? "Begin journaling to enable personalized AI analysis." 
+                  : "Analyze your recent activity for deeper insights."}
+              </p>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: string }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentEntry, setCurrentEntry] = useState<Partial<JournalEntry> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const autoSaveTimer = useRef<any>(null);
+
+  const [isPreview, setIsPreview] = useState(false);
+
+  const handleNew = () => {
+    setCurrentEntry({
+      title: '',
+      content: '',
+      mood: 'Neutral',
+      tags: [],
+      userId
+    });
+    setIsEditing(true);
+    setIsPreview(false);
+  };
+
+  const handleEdit = (entry: JournalEntry) => {
+    setCurrentEntry(entry);
+    setIsEditing(true);
+    setIsPreview(false);
+  };
+
+  const handleSave = async () => {
+    if (!currentEntry?.content) return;
+    setSaveStatus('saving');
+    
+    try {
+      if (currentEntry.id) {
+        await updateDoc(doc(db, 'journalEntries', currentEntry.id), {
+          ...currentEntry,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'journalEntries'), {
+          ...currentEntry,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'journalEntries');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this entry?")) return;
+    try {
+      await deleteDoc(doc(db, 'journalEntries', id));
+      if (currentEntry?.id === id) setIsEditing(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'journalEntries');
+    }
+  };
+
+  // Auto-save logic
+  useEffect(() => {
+    if (isEditing && currentEntry) {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = setTimeout(() => {
+        handleSave();
+      }, 3000);
+    }
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [currentEntry?.content, currentEntry?.title]);
+
+  if (isEditing && currentEntry) {
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <header className="flex items-center justify-between">
+          <Button variant="ghost" onClick={() => setIsEditing(false)}>Back</Button>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={() => setIsPreview(!isPreview)}>
+              {isPreview ? 'Edit' : 'Preview'}
+            </Button>
+            <span className="text-sm text-[var(--muted-foreground)] flex items-center gap-1">
+              {saveStatus === 'saving' && <><Clock className="w-3 h-3 animate-spin" /> Saving...</>}
+              {saveStatus === 'saved' && <><Save className="w-3 h-3" /> Saved</>}
+            </span>
+            <Button onClick={handleSave}>Save Now</Button>
+          </div>
+        </header>
+
+        <Card className="p-6 md:p-8 min-h-[60vh] flex flex-col">
+          <input 
+            type="text" 
+            placeholder="Entry Title..." 
+            className="text-3xl font-bold bg-transparent border-none outline-none mb-6 w-full"
+            value={currentEntry.title}
+            onChange={e => setCurrentEntry({ ...currentEntry, title: e.target.value })}
+          />
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
+                {['Happy', 'Calm', 'Neutral', 'Sad', 'Anxious', 'Productive'].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setCurrentEntry({ ...currentEntry, mood: m })}
+                    className={cn(
+                      "px-4 py-1.5 rounded-full text-xs font-medium border transition-all shrink-0 uppercase tracking-wider",
+                      currentEntry.mood === m 
+                        ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)] shadow-sm" 
+                        : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+          {isPreview ? (
+            <div className="flex-1 prose dark:prose-invert max-w-none markdown-body">
+              <Markdown>{currentEntry.content || ''}</Markdown>
+            </div>
+          ) : (
+            <textarea 
+              placeholder="Start writing your thoughts (Markdown supported)..." 
+              className="flex-1 bg-transparent border-none outline-none resize-none text-lg leading-relaxed"
+              value={currentEntry.content}
+              onChange={e => setCurrentEntry({ ...currentEntry, content: e.target.value })}
+            />
+          )}
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Journal</h1>
+          <p className="text-[var(--muted-foreground)]">Your personal collection of thoughts.</p>
+        </div>
+        <Button onClick={handleNew} className="gap-2">
+          <Plus className="w-5 h-5" />
+          New Entry
+        </Button>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {entries.map(entry => (
+          <Card key={entry.id} className="group cursor-pointer" onClick={() => handleEdit(entry)}>
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <span className="text-[10px] font-bold text-[var(--muted-foreground)] bg-[var(--muted)] px-2 py-1 rounded uppercase tracking-widest">
+                  {entry.mood}
+                </span>
+                <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-widest">
+                  {entry.createdAt ? format(entry.createdAt.toDate(), 'MMM d, yyyy') : 'Just now'}
+                </span>
+              </div>
+              <h3 className="font-bold text-xl mb-3 line-clamp-1 tracking-tight">{entry.title || "Untitled Entry"}</h3>
+              <p className="text-[var(--muted-foreground)] text-sm line-clamp-3 mb-6 leading-relaxed">
+                {entry.content}
+              </p>
+              <div className="flex justify-between items-center">
+                <div className="flex gap-1.5">
+                  {entry.tags?.map(t => (
+                    <span key={t} className="text-[9px] font-bold text-[var(--muted-foreground)] bg-[var(--muted)] px-1.5 py-0.5 rounded uppercase tracking-tighter">#{t}</span>
+                  ))}
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleDelete(entry.id!); }}
+                  className="p-2 text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </Card>
+        ))}
+        {entries.length === 0 && (
+          <div className="col-span-full py-20 text-center">
+            <Book className="w-16 h-16 text-[var(--muted)] mx-auto mb-4" />
+            <p className="text-[var(--muted-foreground)]">No entries yet. Start your journey today.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
+  const [selectedMood, setSelectedMood] = useState<number | null>(null);
+  const [note, setNote] = useState('');
+
+  const moodOptions = [
+    { value: 1, emoji: '😢', label: 'Very Sad' },
+    { value: 2, emoji: '🙁', label: 'Sad' },
+    { value: 3, emoji: '😐', label: 'Neutral' },
+    { value: 4, emoji: '🙂', label: 'Happy' },
+    { value: 5, emoji: '🤩', label: 'Amazing' },
+  ];
+
+  const handleLogMood = async () => {
+    if (!selectedMood) return;
+    const moodObj = moodOptions.find(m => m.value === selectedMood);
+    try {
+      await addDoc(collection(db, 'moodLogs'), {
+        mood: selectedMood,
+        emoji: moodObj?.emoji,
+        note,
+        createdAt: serverTimestamp(),
+        userId
+      });
+      setSelectedMood(null);
+      setNote('');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'moodLogs');
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-4xl mx-auto">
+      <header>
+        <h1 className="text-4xl font-bold tracking-tight">Mood Tracker</h1>
+        <p className="text-[var(--muted-foreground)] mt-1">Reflect on your current emotional state.</p>
+      </header>
+
+      <Card className="p-10 text-center">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-10">Quick Check-in</h2>
+        <div className="flex justify-between gap-4 mb-10">
+          {moodOptions.map(m => (
+            <button
+              key={m.value}
+              onClick={() => setSelectedMood(m.value)}
+              className={cn(
+                "flex flex-col items-center gap-3 p-6 rounded-2xl transition-all flex-1 border border-transparent",
+                selectedMood === m.value 
+                  ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md scale-105" 
+                  : "bg-[var(--muted)] hover:bg-[var(--border)] text-[var(--foreground)]"
+              )}
+            >
+              <span className="text-4xl md:text-5xl">{m.emoji}</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest hidden md:block">{m.label}</span>
+            </button>
+          ))}
+        </div>
+        
+        <textarea
+          placeholder="Add a brief note about your day..."
+          className="w-full p-5 rounded-lg bg-[var(--muted)] border border-[var(--border)] outline-none resize-none mb-8 h-32 focus:ring-1 focus:ring-[var(--primary)] transition-all"
+          value={note}
+          onChange={e => setNote(e.target.value)}
+        />
+        
+        <Button 
+          size="lg" 
+          className="w-full py-6 text-sm uppercase tracking-widest font-bold" 
+          disabled={!selectedMood}
+          onClick={handleLogMood}
+        >
+          Log Mood
+        </Button>
+      </Card>
+
+      <div className="space-y-6">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] flex items-center gap-2">
+          <Clock className="w-4 h-4" />
+          Recent History
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {moods.map(log => (
+            <Card key={log.id} className="p-6 flex items-center gap-5">
+              <span className="text-4xl">{log.emoji}</span>
+              <div className="flex-1">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="font-bold text-lg tracking-tight">{moodOptions.find(m => m.value === log.mood)?.label}</p>
+                  <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-widest">
+                    {log.createdAt ? format(log.createdAt.toDate(), 'MMM d, h:mm a') : 'Just now'}
+                  </span>
+                </div>
+                {log.note && <p className="text-sm text-[var(--muted-foreground)] leading-relaxed italic">"{log.note}"</p>}
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
+  const [newTask, setNewTask] = useState('');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTask.trim()) return;
+    try {
+      await addDoc(collection(db, 'tasks'), {
+        title: newTask,
+        priority,
+        completed: false,
+        createdAt: serverTimestamp(),
+        userId
+      });
+      setNewTask('');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'tasks');
+    }
+  };
+
+  const toggleTask = async (task: Task) => {
+    try {
+      await updateDoc(doc(db, 'tasks', task.id!), {
+        completed: !task.completed
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'tasks');
+    }
+  };
+
+  const deleteTask = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'tasks', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'tasks');
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-3xl mx-auto">
+      <header>
+        <h1 className="text-3xl font-bold">Productivity Hub</h1>
+        <p className="text-[var(--muted-foreground)]">Stay organized and focused on your goals.</p>
+      </header>
+
+      <Card className="p-6">
+        <form onSubmit={handleAddTask} className="flex flex-col md:flex-row gap-4">
+          <input
+            type="text"
+            placeholder="What needs to be done?"
+            className="flex-1 bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all"
+            value={newTask}
+            onChange={e => setNewTask(e.target.value)}
+          />
+          <select 
+            className="bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all text-sm font-medium"
+            value={priority}
+            onChange={e => setPriority(e.target.value as any)}
+          >
+            <option value="low">Low Priority</option>
+            <option value="medium">Medium Priority</option>
+            <option value="high">High Priority</option>
+          </select>
+          <Button type="submit" className="px-8 py-3 uppercase tracking-widest text-xs font-bold">Add Task</Button>
+        </form>
+      </Card>
+
+      <div className="space-y-3">
+        {tasks.map(task => (
+          <motion.div layout key={task.id}>
+            <Card className={cn("p-5 flex items-center gap-5 group transition-all", task.completed && "opacity-50")}>
+              <button 
+                onClick={() => toggleTask(task)}
+                className={cn(
+                  "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
+                  task.completed 
+                    ? "bg-[var(--primary)] border-[var(--primary)] text-[var(--primary-foreground)]" 
+                    : "border-[var(--border)] hover:border-[var(--accent)]"
+                )}
+              >
+                {task.completed && <CheckSquare className="w-4 h-4" />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className={cn("font-medium text-lg tracking-tight truncate", task.completed && "line-through text-[var(--muted-foreground)]")}>{task.title}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={cn(
+                    "text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded",
+                    task.priority === 'high' ? "bg-stone-100 text-stone-600 dark:bg-stone-800" : 
+                    task.priority === 'medium' ? "bg-stone-100 text-stone-600 dark:bg-stone-800" : 
+                    "bg-stone-100 text-stone-600 dark:bg-stone-800"
+                  )}>
+                    {task.priority} Priority
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => deleteTask(task.id!)}
+                className="opacity-0 group-hover:opacity-100 p-2 text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Card>
+          </motion.div>
+        ))}
+        {tasks.length === 0 && (
+          <div className="py-20 text-center">
+            <CheckSquare className="w-16 h-16 text-[var(--muted)] mx-auto mb-4" />
+            <p className="text-[var(--muted-foreground)]">Your task list is empty. Time to plan!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedInspiration[]; userId: string }) {
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const isAlreadySaved = saved.some(s => s.quote === quote?.quote);
+
+  const handleSave = async () => {
+    if (!quote) return;
+    
+    if (isAlreadySaved) {
+      const savedItem = saved.find(s => s.quote === quote.quote);
+      if (savedItem?.id) {
+        try {
+          await deleteDoc(doc(db, 'savedInspirations', savedItem.id));
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, 'savedInspirations');
+        }
+      }
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'savedInspirations'), {
+        quote: quote.quote,
+        author: quote.author,
+        savedAt: serverTimestamp(),
+        userId
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'savedInspirations');
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      const batch = writeBatch(db);
+      saved.forEach(s => {
+        if (s.id) {
+          batch.delete(doc(db, 'savedInspirations', s.id));
+        }
+      });
+      await batch.commit();
+      setShowClearConfirm(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'savedInspirations');
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Inspiration</h1>
+          <p className="text-[var(--muted-foreground)]">Daily wisdom to fuel your journey.</p>
+        </div>
+        {saved.length > 0 && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowClearConfirm(true)}
+            className="text-xs uppercase tracking-widest font-bold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30"
+          >
+            Clear All
+          </Button>
+        )}
+      </header>
+
+      <AnimatePresence>
+        {showClearConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--background)] p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-[var(--border)] text-center"
+            >
+              <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2">Clear Favorites?</h3>
+              <p className="text-[var(--muted-foreground)] mb-8">This will permanently remove all your saved quotes.</p>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
+                <Button className="flex-1 bg-red-500 hover:bg-red-600 text-white border-none" onClick={handleClearAll}>Clear All</Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Card className="p-10 md:p-16 bg-[var(--primary)] text-[var(--primary-foreground)] text-center relative overflow-hidden border-none">
+        <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+          <Quote className="w-96 h-96 -translate-x-20 -translate-y-20" />
+        </div>
+        <div className="relative z-10 max-w-3xl mx-auto">
+          <p className="text-3xl md:text-5xl font-serif italic mb-10 leading-tight tracking-tight">
+            "{quote?.quote || "Loading your daily inspiration..."}"
+          </p>
+          <p className="text-[var(--primary-foreground)] opacity-70 text-xl mb-12 font-medium">— {quote?.author || "..."}</p>
+          <div className="p-8 bg-white/5 backdrop-blur-sm rounded-xl mb-12 text-left border border-white/10">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary-foreground)] opacity-50 mb-3">Daily Reflection Tip</p>
+            <p className="text-xl leading-relaxed font-light">{quote?.tip || "..."}</p>
+          </div>
+          <Button 
+            variant="outline" 
+            className={cn(
+              "bg-transparent border-white/20 text-white hover:bg-white/10 px-10 py-6 text-xs uppercase tracking-widest font-bold",
+              isAlreadySaved && "bg-white/10"
+            )}
+            onClick={handleSave}
+            disabled={!quote}
+          >
+            <Star className={cn("w-4 h-4 mr-2", isAlreadySaved && "fill-current")} />
+            {isAlreadySaved ? 'Saved to Favorites' : 'Save to Favorites'}
+          </Button>
+        </div>
+      </Card>
+
+      <div className="space-y-6">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] flex items-center gap-2">
+          <Star className="w-4 h-4" />
+          Saved Favorites ({saved.length})
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {saved.map(s => (
+            <Card key={s.id} className="p-8 border-l-4 border-l-[var(--primary)]">
+              <Quote className="w-6 h-6 opacity-10 mb-4" />
+              <p className="text-xl font-serif italic mb-4 leading-snug tracking-tight">"{s.quote}"</p>
+              <p className="text-sm font-bold text-[var(--muted-foreground)] uppercase tracking-widest">— {s.author}</p>
+            </Card>
+          ))}
+          {saved.length === 0 && (
+            <div className="col-span-full py-20 text-center bg-[var(--muted)]/20 rounded-2xl border-2 border-dashed border-[var(--border)]">
+              <Star className="w-12 h-12 text-[var(--muted)] mx-auto mb-4" />
+              <p className="text-[var(--muted-foreground)]">No favorites yet. Save a quote to see it here.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({ preferences, onLogout, user }: { preferences: UserPreference | null; onLogout: () => void; user: User }) {
+  const toggleTheme = async () => {
+    if (!preferences) return;
+    try {
+      await updateDoc(doc(db, 'userPreferences', preferences.id!), {
+        theme: preferences.theme === 'light' ? 'dark' : 'light'
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'userPreferences');
+    }
+  };
+
+  const toggleNotifications = async () => {
+    if (!preferences) return;
+    try {
+      await updateDoc(doc(db, 'userPreferences', preferences.id!), {
+        notificationsEnabled: !preferences.notificationsEnabled
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'userPreferences');
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-2xl mx-auto">
+      <header>
+        <h1 className="text-3xl font-bold">Settings</h1>
+        <p className="text-[var(--muted-foreground)]">Personalize your Mindful Mirror experience.</p>
+      </header>
+
+      <Card className="divide-y divide-[var(--border)] overflow-hidden">
+        <div className="p-8 flex items-center gap-6 bg-[var(--muted)]/30">
+          <img src={user.photoURL || ''} alt="" className="w-20 h-20 rounded-full border-4 border-[var(--background)] shadow-sm" />
+          <div>
+            <p className="font-bold text-2xl tracking-tight">{user.displayName}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-[var(--muted-foreground)] font-medium">{user.email}</p>
+              <span className="text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-400">
+                {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 
+                 user.providerData[0]?.providerId === 'apple.com' ? 'Apple' : 
+                 user.providerData[0]?.providerId === 'password' ? 'Email' : 'Account'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 space-y-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
+                {preferences?.theme === 'dark' ? <Moon className="w-6 h-6" /> : <Sun className="w-6 h-6" />}
+              </div>
+              <div>
+                <p className="font-bold text-lg tracking-tight">Dark Mode</p>
+                <p className="text-sm text-[var(--muted-foreground)]">Adjust the interface for low-light environments</p>
+              </div>
+            </div>
+            <button 
+              onClick={toggleTheme}
+              className={cn(
+                "w-14 h-7 rounded-full transition-all relative p-1",
+                preferences?.theme === 'dark' ? "bg-[var(--primary)]" : "bg-[var(--border)]"
+              )}
+            >
+              <div className={cn(
+                "w-5 h-5 bg-white rounded-full transition-all shadow-sm",
+                preferences?.theme === 'dark' ? "translate-x-7" : "translate-x-0"
+              )} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="font-bold text-lg tracking-tight">Notifications</p>
+                <p className="text-sm text-[var(--muted-foreground)]">Receive daily reminders and wellness alerts</p>
+              </div>
+            </div>
+            <button 
+              onClick={toggleNotifications}
+              className={cn(
+                "w-14 h-7 rounded-full transition-all relative p-1",
+                preferences?.notificationsEnabled ? "bg-[var(--primary)]" : "bg-[var(--border)]"
+              )}
+            >
+              <div className={cn(
+                "w-5 h-5 bg-white rounded-full transition-all shadow-sm",
+                preferences?.notificationsEnabled ? "translate-x-7" : "translate-x-0"
+              )} />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-8 bg-[var(--muted)]/10">
+          <Button variant="outline" onClick={onLogout} className="w-full py-6 gap-3 text-sm font-bold uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:hover:bg-red-900/20">
+            <LogOut className="w-5 h-5" />
+            Sign Out of Account
+          </Button>
+        </div>
+      </Card>
+
+      <div className="text-center text-[var(--muted-foreground)] text-sm">
+        <p>Mindful Mirror v1.0.0</p>
+        <p>© 2026 Mindful Mirror Team</p>
+      </div>
+    </div>
+  );
+}
+

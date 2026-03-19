@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "JournalEntry": {
+      "title": "Journal Entry",
+      "description": "A daily journaling entry with rich text and metadata.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the entry." },
+        "content": { "type": "string", "description": "The rich text content of the entry." },
+        "mood": { "type": "string", "description": "The primary mood associated with this entry." },
+        "tags": { "type": "array", "items": { "type": "string" }, "description": "List of tags or topics." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." },
+        "userId": { "type": "string", "description": "The ID of the user who created the entry." }
+      },
+      "required": ["content", "createdAt", "userId"]
+    },
+    "MoodLog": {
+      "title": "Mood Log",
+      "description": "A daily mood check-in.",
+      "type": "object",
+      "properties": {
+        "mood": { "type": "integer", "description": "Mood score from 1 to 5." },
+        "emoji": { "type": "string", "description": "Emoji representing the mood." },
+        "note": { "type": "string", "description": "Optional note about the mood." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of the log." },
+        "userId": { "type": "string", "description": "The ID of the user." }
+      },
+      "required": ["mood", "createdAt", "userId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A productivity task.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Task description." },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"], "description": "Task priority level." },
+        "deadline": { "type": "string", "format": "date-time", "description": "Optional deadline." },
+        "completed": { "type": "boolean", "description": "Whether the task is finished." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "userId": { "type": "string", "description": "The ID of the user." }
+      },
+      "required": ["title", "completed", "createdAt", "userId"]
+    },
+    "UserPreference": {
+      "title": "User Preference",
+      "description": "User-specific application settings.",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string", "enum": ["light", "dark"], "description": "UI theme mode." },
+        "colorTheme": { "type": "string", "description": "Custom color theme identifier." },
+        "notificationsEnabled": { "type": "boolean", "description": "Whether notifications are active." },
+        "userId": { "type": "string", "description": "The ID of the user." }
+      },
+      "required": ["userId"]
+    },
+    "SavedInspiration": {
+      "title": "Saved Inspiration",
+      "description": "A motivational quote or tip saved by the user.",
+      "type": "object",
+      "properties": {
+        "quote": { "type": "string", "description": "The inspirational text." },
+        "author": { "type": "string", "description": "The author of the quote." },
+        "savedAt": { "type": "string", "format": "date-time", "description": "When it was saved." },
+        "userId": { "type": "string", "description": "The ID of the user." }
+      },
+      "required": ["quote", "savedAt", "userId"]
+    }
+  },
+  "firestore": {
+    "/journalEntries/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Collection of user journal entries."
+    },
+    "/moodLogs/{logId}": {
+      "schema": "MoodLog",
+      "description": "Collection of user mood logs."
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Collection of user tasks."
+    },
+    "/userPreferences/{prefId}": {
+      "schema": "UserPreference",
+      "description": "User settings and preferences."
+    },
+    "/savedInspirations/{inspId}": {
+      "schema": "SavedInspiration",
+      "description": "Collection of saved inspirational quotes."
+    }
+  }
+}

@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "PT Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --background: #fafaf9; /* Stone 50 */
+  --foreground: #1c1917; /* Stone 900 */
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --primary: #44403c; /* Stone 700 */
+  --primary-foreground: #fafaf9;
+  --muted: #f5f5f4; /* Stone 100 */
+  --muted-foreground: #78716c; /* Stone 500 */
+  --border: #e7e5e4; /* Stone 200 */
+  --accent: #a8a29e; /* Stone 400 */
+}
+
+.dark {
+  --background: #0c0a09; /* Stone 950 */
+  --foreground: #f5f5f4; /* Stone 100 */
+  --card: #1c1917; /* Stone 900 */
+  --card-foreground: #f5f5f4;
+  --primary: #d6d3d1; /* Stone 300 */
+  --primary-foreground: #0c0a09;
+  --muted: #292524; /* Stone 800 */
+  --muted-foreground: #a8a29e; /* Stone 400 */
+  --border: #44403c; /* Stone 700 */
+  --accent: #57534e; /* Stone 600 */
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.markdown-body {
+  line-height: 1.7;
+  font-size: 1.05rem;
+}
+
+.markdown-body h1 { font-size: 1.8em; font-weight: 700; margin-bottom: 0.75em; letter-spacing: -0.02em; }
+.markdown-body h2 { font-size: 1.4em; font-weight: 700; margin-bottom: 0.75em; letter-spacing: -0.01em; }
+.markdown-body h3 { font-size: 1.2em; font-weight: 700; margin-bottom: 0.75em; }
+.markdown-body p { margin-bottom: 1.25em; color: var(--foreground); opacity: 0.9; }
+.markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1.25em; }
+.markdown-body ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1.25em; }
+.markdown-body blockquote { border-left: 2px solid var(--primary); padding-left: 1.25em; font-style: italic; margin-bottom: 1.25em; opacity: 0.8; }
+.markdown-body code { background-color: var(--muted); padding: 0.2em 0.4em; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+
+
+
