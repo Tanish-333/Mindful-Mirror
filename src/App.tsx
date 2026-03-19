@@ -165,6 +165,7 @@ export default function App() {
   const [preferences, setPreferences] = useState<UserPreference | null>(null);
   const [savedInspirations, setSavedInspirations] = useState<SavedInspiration[]>([]);
   const [dailyQuote, setDailyQuote] = useState<any>(null);
+  const [loadingQuote, setLoadingQuote] = useState(false);
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
@@ -251,10 +252,14 @@ export default function App() {
 
   // --- Daily Inspiration Fetch ---
   useEffect(() => {
-    if (user) {
-      getDailyInspiration().then(setDailyQuote);
-    }
-  }, [user]);
+    const fetchQuote = async () => {
+      setLoadingQuote(true);
+      const quote = await getDailyInspiration();
+      setDailyQuote(quote);
+      setLoadingQuote(false);
+    };
+    fetchQuote();
+  }, []);
 
   // --- AI Insights Fetch ---
   const fetchInsights = async () => {
@@ -493,7 +498,18 @@ export default function App() {
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {activeTab === 'dashboard' && <Dashboard entries={entries} moods={moods} tasks={tasks} quote={dailyQuote} insights={aiInsights} fetchInsights={fetchInsights} loadingInsights={loadingInsights} />}
+              {activeTab === 'dashboard' && (
+                <Dashboard 
+                  entries={entries} 
+                  moods={moods} 
+                  tasks={tasks} 
+                  quote={dailyQuote} 
+                  loadingQuote={loadingQuote}
+                  insights={aiInsights} 
+                  fetchInsights={fetchInsights} 
+                  loadingInsights={loadingInsights} 
+                />
+              )}
               {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} />}
               {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} />}
               {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} />}
@@ -526,7 +542,7 @@ function NavButton({ active, onClick, icon, label }: { active: boolean; onClick:
   );
 }
 
-function Dashboard({ entries, moods, tasks, quote, insights, fetchInsights, loadingInsights }: any) {
+function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights }: any) {
   const moodData = moods.slice(0, 7).reverse().map((m: any) => ({
     date: format(m.createdAt?.toDate() || new Date(), 'MMM d'),
     mood: m.mood
@@ -550,14 +566,27 @@ function Dashboard({ entries, moods, tasks, quote, insights, fetchInsights, load
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Daily Quote Card */}
-        <Card className="md:col-span-2 p-8 bg-[var(--primary)] text-[var(--primary-foreground)] border-none">
+        <Card className="md:col-span-2 p-8 bg-[var(--primary)] text-[var(--primary-foreground)] border-none relative overflow-hidden">
+          {loadingQuote && !quote && (
+            <div className="absolute inset-0 bg-black/10 backdrop-blur-[2px] flex items-center justify-center z-10">
+              <Sparkles className="w-8 h-8 animate-pulse opacity-50" />
+            </div>
+          )}
           <div className="flex flex-col h-full justify-between">
             <div>
               <Quote className="w-8 h-8 opacity-20 mb-6" />
-              <p className="text-2xl md:text-3xl font-serif italic mb-6 leading-tight tracking-tight">
+              <p className={cn(
+                "text-2xl md:text-3xl font-serif italic mb-6 leading-tight tracking-tight transition-opacity duration-500",
+                loadingQuote && !quote ? "opacity-0" : "opacity-100"
+              )}>
                 "{quote?.quote || "The best way to predict the future is to create it."}"
               </p>
-              <p className="text-[var(--primary-foreground)] opacity-70 font-medium">— {quote?.author || "Peter Drucker"}</p>
+              <p className={cn(
+                "text-[var(--primary-foreground)] opacity-70 font-medium transition-opacity duration-500",
+                loadingQuote && !quote ? "opacity-0" : "opacity-100"
+              )}>
+                — {quote?.author || "Peter Drucker"}
+              </p>
             </div>
             <div className="mt-8 flex items-center gap-2 text-xs uppercase tracking-widest opacity-50">
               <Star className="w-3 h-3 fill-current" />

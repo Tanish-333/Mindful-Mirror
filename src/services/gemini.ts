@@ -38,9 +38,23 @@ export async function getAIInsights(entries: string[], moods: number[]) {
 }
 
 export async function getDailyInspiration() {
-  const prompt = "Provide a daily inspirational quote and a short life tip. Return in JSON: { \"quote\": \"...\", \"author\": \"...\", \"tip\": \"...\" }";
-  
+  const CACHE_KEY = 'mindful_mirror_daily_quote';
+  const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
   try {
+    // Check cache first
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_EXPIRY) {
+        console.log("Using cached daily inspiration");
+        return data;
+      }
+    }
+
+    console.log("Fetching fresh daily inspiration from AI...");
+    const prompt = "Provide a daily inspirational quote and a short life tip. Return in JSON: { \"quote\": \"...\", \"author\": \"...\", \"tip\": \"...\" }";
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -49,9 +63,24 @@ export async function getDailyInspiration() {
       },
     });
 
-    return JSON.parse(response.text || "{}");
+    const result = JSON.parse(response.text || "{}");
+    
+    // Cache the result
+    if (result.quote) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        data: result,
+        timestamp: Date.now()
+      }));
+    }
+
+    return result;
   } catch (error) {
     console.error("Error getting daily inspiration:", error);
+    // Try to return cached data even if expired as a fallback
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached).data;
+    }
     return null;
   }
 }
