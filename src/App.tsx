@@ -269,10 +269,13 @@ export default function App() {
 
   const handleLogin = async () => {
     setLoginError(null);
+    console.log("Starting Google login...");
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      console.log("Google login successful:", result.user.email);
     } catch (error: any) {
+      console.error("Google login error:", error);
       if (error.code === 'auth/popup-closed-by-user') {
         setLoginError("The login window was closed before completion. Please try again.");
       } else if (error.code === 'auth/cancelled-by-user') {
@@ -280,8 +283,7 @@ export default function App() {
       } else if (error.code === 'auth/popup-blocked') {
         setLoginError("The login popup was blocked by your browser. Please allow popups for this site.");
       } else {
-        setLoginError("An unexpected error occurred during login. Please try again.");
-        console.error("Login failed:", error);
+        setLoginError(`Login failed: ${error.message}`);
       }
     }
   };
@@ -289,30 +291,35 @@ export default function App() {
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
+    console.log(`Starting email ${isSigningUp ? 'signup' : 'login'} for: ${email}`);
+    
     if (!email || !password) {
       setLoginError("Please enter both email and password.");
       return;
     }
+    
     try {
       if (isSigningUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        console.log("Email signup successful:", result.user.email);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        console.log("Email login successful:", result.user.email);
       }
     } catch (error: any) {
+      console.error("Email auth error:", error);
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        setLoginError("Invalid email or password.");
+        setLoginError("Invalid email or password. If you don't have an account, please click 'Create Account' below.");
       } else if (error.code === 'auth/email-already-in-use') {
-        setLoginError("This email is already in use.");
+        setLoginError("This email is already in use. Try signing in instead.");
       } else if (error.code === 'auth/weak-password') {
         setLoginError("Password should be at least 6 characters.");
       } else if (error.code === 'auth/invalid-email') {
         setLoginError("Please enter a valid email address.");
       } else if (error.code === 'auth/operation-not-allowed') {
-        setLoginError("Email/Password login is not enabled. Please go to the Firebase Console -> Authentication -> Sign-in method and enable 'Email/Password'.");
+        setLoginError("Email/Password login is not enabled in Firebase. Please check your console settings.");
       } else {
-        setLoginError("Authentication failed. Please try again.");
-        console.error("Email auth failed:", error);
+        setLoginError(`Authentication failed: ${error.message}`);
       }
     }
   };
@@ -353,57 +360,61 @@ export default function App() {
           )}
           
           <div className="space-y-6">
-            <form onSubmit={handleEmailAuth} className="space-y-4">
-              <div className="space-y-2 text-left">
-                <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="name@example.com"
-                  className="w-full bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                />
+            <div className="p-6 bg-[var(--card)] rounded-2xl shadow-sm border border-[var(--border)]">
+              <form onSubmit={handleEmailAuth} className="space-y-4">
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="name@example.com"
+                    className="w-full bg-[var(--muted)] px-5 py-3 rounded-xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    className="w-full bg-[var(--muted)] px-5 py-3 rounded-xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" className="w-full py-6 text-xs font-bold uppercase tracking-widest rounded-xl">
+                  {isSigningUp ? 'Create Account' : 'Sign In'}
+                </Button>
+              </form>
+
+              <div className="mt-6 flex flex-col items-center gap-4">
+                <button 
+                  onClick={() => setIsSigningUp(!isSigningUp)}
+                  className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary)] hover:opacity-80 transition-opacity"
+                >
+                  {isSigningUp ? 'Already have an account? Sign In' : 'New here? Create Account'}
+                </button>
               </div>
-              <div className="space-y-2 text-left">
-                <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  className="w-full bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                />
-              </div>
-              <Button type="submit" className="w-full py-6 text-sm font-bold uppercase tracking-widest">
-                {isSigningUp ? 'Create Account' : 'Sign In'}
-              </Button>
-            </form>
+            </div>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-[var(--border)]"></span>
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-[var(--background)] px-2 text-[var(--muted-foreground)] tracking-widest">Or continue with</span>
+              <div className="relative flex justify-center text-[10px] uppercase">
+                <span className="bg-[var(--background)] px-4 text-[var(--muted-foreground)] tracking-widest font-bold">Or</span>
               </div>
             </div>
 
-            <Button variant="outline" onClick={handleLogin} className="w-full gap-3 py-6 text-sm font-bold uppercase tracking-widest">
+            <Button variant="outline" onClick={handleLogin} className="w-full gap-3 py-6 text-xs font-bold uppercase tracking-widest rounded-xl border-[var(--border)]">
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                 <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                 <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
                 <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
-              Google
+              Continue with Google
             </Button>
-            
-            <button 
-              onClick={() => setIsSigningUp(!isSigningUp)}
-              className="text-xs font-bold uppercase tracking-widest text-[var(--primary)] hover:underline"
-            >
-              {isSigningUp ? 'Already have an account? Sign In' : 'New here? Make Account'}
-            </button>
           </div>
 
           <p className="mt-8 text-xs text-[var(--muted-foreground)] uppercase tracking-widest">
@@ -673,6 +684,7 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   const [currentEntry, setCurrentEntry] = useState<Partial<JournalEntry> | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const autoSaveTimer = useRef<any>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const [isPreview, setIsPreview] = useState(false);
 
@@ -719,10 +731,10 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this entry?")) return;
     try {
       await deleteDoc(doc(db, 'journalEntries', id));
       if (currentEntry?.id === id) setIsEditing(false);
+      setDeleteConfirmId(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'journalEntries');
     }
@@ -812,6 +824,32 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
         </Button>
       </header>
 
+      <AnimatePresence>
+        {deleteConfirmId && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--background)] p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-[var(--border)] text-center"
+            >
+              <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2">Delete Entry?</h3>
+              <p className="text-[var(--muted-foreground)] mb-8">This action cannot be undone. Your thoughts will be deleted forever.</p>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+                <Button className="flex-1 bg-red-500 hover:bg-red-600 text-white border-none" onClick={() => handleDelete(deleteConfirmId)}>Delete Forever</Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {entries.map(entry => (
           <Card key={entry.id} className="group cursor-pointer" onClick={() => handleEdit(entry)}>
@@ -835,7 +873,7 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
                   ))}
                 </div>
                 <button 
-                  onClick={(e) => { e.stopPropagation(); handleDelete(entry.id!); }}
+                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(entry.id!); }}
                   className="p-2 text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -858,6 +896,7 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
 function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const moodOptions = [
     { value: 1, emoji: '😢', label: 'Very Sad' },
@@ -885,12 +924,47 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
     }
   };
 
+  const handleDeleteMood = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'moodLogs', id));
+      setDeleteConfirmId(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'moodLogs');
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <header>
         <h1 className="text-4xl font-bold tracking-tight">Mood Tracker</h1>
         <p className="text-[var(--muted-foreground)] mt-1">Reflect on your current emotional state.</p>
       </header>
+
+      <AnimatePresence>
+        {deleteConfirmId && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--background)] p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-[var(--border)] text-center"
+            >
+              <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2">Delete Mood Log?</h3>
+              <p className="text-[var(--muted-foreground)] mb-8">This action cannot be undone. Your mood log will be deleted forever.</p>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+                <Button className="flex-1 bg-red-500 hover:bg-red-600 text-white border-none" onClick={() => handleDeleteMood(deleteConfirmId)}>Delete Forever</Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Card className="p-10 text-center">
         <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-10">Quick Check-in</h2>
@@ -936,7 +1010,7 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {moods.map(log => (
-            <Card key={log.id} className="p-6 flex items-center gap-5">
+            <Card key={log.id} className="p-6 flex items-center gap-5 group relative">
               <span className="text-4xl">{log.emoji}</span>
               <div className="flex-1">
                 <div className="flex justify-between items-center mb-1">
@@ -947,6 +1021,12 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
                 </div>
                 {log.note && <p className="text-sm text-[var(--muted-foreground)] leading-relaxed italic">"{log.note}"</p>}
               </div>
+              <button 
+                onClick={() => setDeleteConfirmId(log.id!)}
+                className="opacity-0 group-hover:opacity-100 p-2 text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all absolute top-2 right-2"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </Card>
           ))}
         </div>
