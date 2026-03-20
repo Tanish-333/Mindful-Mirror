@@ -719,6 +719,8 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const autoSaveTimer = useRef<any>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const [isPreview, setIsPreview] = useState(false);
 
@@ -741,7 +743,7 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   };
 
   const handleSave = async () => {
-    if (!currentEntry?.content) return;
+    if (!currentEntry?.content || saveStatus === 'saving') return;
     setSaveStatus('saving');
     
     try {
@@ -751,16 +753,19 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
           updatedAt: serverTimestamp()
         });
       } else {
-        await addDoc(collection(db, 'journalEntries'), {
+        const docRef = await addDoc(collection(db, 'journalEntries'), {
           ...currentEntry,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+        // Update currentEntry with the new ID to prevent duplicates on next save
+        setCurrentEntry(prev => prev ? { ...prev, id: docRef.id } : null);
       }
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'journalEntries');
+      setSaveStatus('idle');
     }
   };
 
@@ -771,6 +776,25 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
       setDeleteConfirmId(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'journalEntries');
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (entries.length === 0) return;
+    setIsDeletingAll(true);
+    try {
+      const batch = writeBatch(db);
+      entries.forEach((entry) => {
+        if (entry.id) {
+          batch.delete(doc(db, 'journalEntries', entry.id));
+        }
+      });
+      await batch.commit();
+      setShowDeleteAllConfirm(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'journalEntries');
+    } finally {
+      setIsDeletingAll(false);
     }
   };
 
@@ -852,13 +876,61 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
           <h1 className="text-3xl font-bold">Journal</h1>
           <p className="text-[var(--muted-foreground)]">Your personal collection of thoughts.</p>
         </div>
-        <Button onClick={handleNew} className="gap-2 w-full md:w-auto py-5 md:py-2">
-          <Plus className="w-5 h-5" />
-          New Entry
-        </Button>
+        <div className="flex gap-3 w-full md:w-auto">
+          {entries.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDeleteAllConfirm(true)} 
+              className="gap-2 flex-1 md:flex-none py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete All
+            </Button>
+          )}
+          <Button onClick={handleNew} className="gap-2 flex-1 md:flex-none py-5 md:py-2">
+            <Plus className="w-5 h-5" />
+            New Entry
+          </Button>
+        </div>
       </header>
 
       <AnimatePresence>
+        {showDeleteAllConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--background)] p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-[var(--border)] text-center"
+            >
+              <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2">Delete All Entries?</h3>
+              <p className="text-[var(--muted-foreground)] mb-8">This will permanently delete all {entries.length} journal entries. This action cannot be undone.</p>
+              <div className="flex flex-col gap-3">
+                <Button 
+                  className="w-full bg-red-500 hover:bg-red-600 text-white border-none py-6 font-bold uppercase tracking-widest text-xs" 
+                  onClick={handleDeleteAll}
+                  disabled={isDeletingAll}
+                >
+                  {isDeletingAll ? 'Deleting...' : 'Delete Everything'}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="w-full py-6 font-bold uppercase tracking-widest text-xs" 
+                  onClick={() => setShowDeleteAllConfirm(false)}
+                  disabled={isDeletingAll}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
         {deleteConfirmId && (
           <motion.div 
             initial={{ opacity: 0 }}
@@ -931,6 +1003,9 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const moodOptions = [
     { value: 1, emoji: '😢', label: 'Very Sad' },
@@ -941,7 +1016,8 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
   ];
 
   const handleLogMood = async () => {
-    if (!selectedMood) return;
+    if (!selectedMood || isSaving) return;
+    setIsSaving(true);
     const moodObj = moodOptions.find(m => m.value === selectedMood);
     try {
       await addDoc(collection(db, 'moodLogs'), {
@@ -955,6 +1031,8 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
       setNote('');
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'moodLogs');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -967,14 +1045,81 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
     }
   };
 
+  const handleDeleteAllMoods = async () => {
+    if (moods.length === 0) return;
+    setIsDeletingAll(true);
+    try {
+      const batch = writeBatch(db);
+      moods.forEach((log) => {
+        if (log.id) {
+          batch.delete(doc(db, 'moodLogs', log.id));
+        }
+      });
+      await batch.commit();
+      setShowDeleteAllConfirm(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'moodLogs');
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   return (
     <div className="space-y-6 md:space-y-8 max-w-4xl mx-auto">
-      <header>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Mood Tracker</h1>
-        <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">Reflect on your current emotional state.</p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Mood Tracker</h1>
+          <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">Reflect on your current emotional state.</p>
+        </div>
+        {moods.length > 0 && (
+          <Button 
+            variant="outline" 
+            onClick={() => setShowDeleteAllConfirm(true)} 
+            className="gap-2 w-full md:w-auto py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete All
+          </Button>
+        )}
       </header>
 
       <AnimatePresence>
+        {showDeleteAllConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--background)] p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-[var(--border)] text-center"
+            >
+              <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2">Delete All Mood Logs?</h3>
+              <p className="text-[var(--muted-foreground)] mb-8">This will permanently delete all {moods.length} mood logs. This action cannot be undone.</p>
+              <div className="flex flex-col gap-3">
+                <Button 
+                  className="w-full bg-red-500 hover:bg-red-600 text-white border-none py-6 font-bold uppercase tracking-widest text-xs" 
+                  onClick={handleDeleteAllMoods}
+                  disabled={isDeletingAll}
+                >
+                  {isDeletingAll ? 'Deleting...' : 'Delete Everything'}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="w-full py-6 font-bold uppercase tracking-widest text-xs" 
+                  onClick={() => setShowDeleteAllConfirm(false)}
+                  disabled={isDeletingAll}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
         {deleteConfirmId && (
           <motion.div 
             initial={{ opacity: 0 }}
@@ -1030,10 +1175,10 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
         <Button 
           size="lg" 
           className="w-full py-5 md:py-6 text-xs md:text-sm uppercase tracking-widest font-bold" 
-          disabled={!selectedMood}
+          disabled={!selectedMood || isSaving}
           onClick={handleLogMood}
         >
-          Log Mood
+          {isSaving ? 'Logging...' : 'Log Mood'}
         </Button>
       </Card>
 
@@ -1078,10 +1223,14 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
 function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
   const [newTask, setNewTask] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [isAdding, setIsAdding] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTask.trim()) return;
+    if (!newTask.trim() || isAdding) return;
+    setIsAdding(true);
     try {
       await addDoc(collection(db, 'tasks'), {
         title: newTask,
@@ -1093,6 +1242,8 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
       setNewTask('');
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'tasks');
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -1114,12 +1265,82 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
     }
   };
 
+  const handleDeleteAllTasks = async () => {
+    if (tasks.length === 0) return;
+    setIsDeletingAll(true);
+    try {
+      const batch = writeBatch(db);
+      tasks.forEach((task) => {
+        if (task.id) {
+          batch.delete(doc(db, 'tasks', task.id));
+        }
+      });
+      await batch.commit();
+      setShowDeleteAllConfirm(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'tasks');
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   return (
     <div className="space-y-6 md:space-y-8 max-w-3xl mx-auto">
-      <header>
-        <h1 className="text-3xl font-bold">Productivity Hub</h1>
-        <p className="text-[var(--muted-foreground)] text-sm md:text-base">Stay organized and focused on your goals.</p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Productivity Hub</h1>
+          <p className="text-[var(--muted-foreground)] text-sm md:text-base">Stay organized and focused on your goals.</p>
+        </div>
+        {tasks.length > 0 && (
+          <Button 
+            variant="outline" 
+            onClick={() => setShowDeleteAllConfirm(true)} 
+            className="gap-2 w-full md:w-auto py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete All
+          </Button>
+        )}
       </header>
+
+      <AnimatePresence>
+        {showDeleteAllConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--background)] p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-[var(--border)] text-center"
+            >
+              <Trash2 className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2">Delete All Tasks?</h3>
+              <p className="text-[var(--muted-foreground)] mb-8">This will permanently delete all {tasks.length} tasks. This action cannot be undone.</p>
+              <div className="flex flex-col gap-3">
+                <Button 
+                  className="w-full bg-red-500 hover:bg-red-600 text-white border-none py-6 font-bold uppercase tracking-widest text-xs" 
+                  onClick={handleDeleteAllTasks}
+                  disabled={isDeletingAll}
+                >
+                  {isDeletingAll ? 'Deleting...' : 'Delete Everything'}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="w-full py-6 font-bold uppercase tracking-widest text-xs" 
+                  onClick={() => setShowDeleteAllConfirm(false)}
+                  disabled={isDeletingAll}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Card className="p-5 md:p-6">
         <form onSubmit={handleAddTask} className="flex flex-col md:flex-row gap-3 md:gap-4">
@@ -1139,7 +1360,9 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
             <option value="medium">Medium Priority</option>
             <option value="high">High Priority</option>
           </select>
-          <Button type="submit" className="px-8 py-3.5 md:py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold w-full md:w-auto">Add Task</Button>
+          <Button type="submit" disabled={isAdding} className="px-8 py-3.5 md:py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold w-full md:w-auto">
+            {isAdding ? 'Adding...' : 'Add Task'}
+          </Button>
         </form>
       </Card>
 
