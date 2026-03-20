@@ -279,7 +279,7 @@ export default function App() {
 
   // --- AI Insights Fetch ---
   const fetchInsights = async () => {
-    if (!user || entries.length === 0) return;
+    if (!user || (entries.length === 0 && moods.length === 0)) return;
     setLoadingInsights(true);
     const recentEntries = entries.slice(0, 5).map(e => e.content);
     const recentMoods = moods.slice(0, 5).map(m => m.mood);
@@ -802,7 +802,7 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Overview</h1>
           <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">A summary of your recent wellness and productivity.</p>
         </div>
-        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || entries.length === 0} className="gap-2 w-full md:w-auto py-5 md:py-2">
+        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || (entries.length === 0 && moods.length === 0)} className="gap-2 w-full md:w-auto py-5 md:py-2">
           <Sparkles className={cn("w-4 h-4", loadingInsights && "animate-spin")} />
           {loadingInsights ? "Analyzing..." : "AI Analysis"}
         </Button>
@@ -940,8 +940,8 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
             <div className="flex flex-col items-center justify-center h-full py-8 md:py-12 text-center">
               <Sparkles className="w-8 h-8 md:w-10 md:h-10 text-[var(--muted)] mb-4 opacity-50" />
               <p className="text-xs md:text-sm text-[var(--muted-foreground)] max-w-[200px]">
-                {entries.length === 0 
-                  ? "Begin journaling to enable personalized AI analysis." 
+                {entries.length === 0 && moods.length === 0
+                  ? "I need at least one journal entry or mood check-in to analyze." 
                   : "Analyze your recent activity for deeper insights."}
               </p>
             </div>
@@ -955,7 +955,9 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
 function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentEntry, setCurrentEntry] = useState<Partial<JournalEntry> | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'already-saved'>('idle');
+  const [lastSavedHash, setLastSavedHash] = useState('');
+  const isSavingRef = useRef(false);
   const autoSaveTimer = useRef<any>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
@@ -982,7 +984,19 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   };
 
   const handleSave = async () => {
-    if (!currentEntry?.content || saveStatus === 'saving') return;
+    if (!currentEntry?.content || isSavingRef.current) return;
+    
+    const currentHash = `${currentEntry.title || ''}-${currentEntry.content}-${currentEntry.mood || ''}`;
+    if (currentHash === lastSavedHash && currentEntry.id) {
+      setSaveStatus('already-saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      return;
+    }
+
+    // Clear any pending auto-save
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+
+    isSavingRef.current = true;
     setSaveStatus('saving');
     
     try {
@@ -1000,11 +1014,14 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
         // Update currentEntry with the new ID to prevent duplicates on next save
         setCurrentEntry(prev => prev ? { ...prev, id: docRef.id } : null);
       }
+      setLastSavedHash(currentHash);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'journalEntries');
       setSaveStatus('idle');
+    } finally {
+      isSavingRef.current = false;
     }
   };
 
@@ -1061,14 +1078,27 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
               <span className="md:hidden">Back</span>
             </Button>
             <div className="flex items-center gap-2 md:hidden">
-               <span className="text-[10px] text-[var(--muted-foreground)] flex items-center gap-1">
+               <span className={cn(
+                 "text-[10px] flex items-center gap-1 transition-all",
+                 (saveStatus === 'saved' || saveStatus === 'already-saved') ? "text-green-500 font-bold scale-110" : "text-[var(--muted-foreground)]"
+               )}>
                   {saveStatus === 'saving' && <Clock className="w-3 h-3 animate-spin" />}
-                  {saveStatus === 'saved' && <Save className="w-3 h-3" />}
-                  {saveStatus === 'saving' ? 'Saving' : 'Saved'}
+                  {(saveStatus === 'saved' || saveStatus === 'already-saved') && <CheckSquare className="w-3 h-3" />}
+                  {saveStatus === 'saving' ? 'Saving' : saveStatus === 'already-saved' ? 'Already Saved' : saveStatus === 'saved' ? 'Saved' : 'Auto-saving'}
                </span>
             </div>
           </div>
           <div className="flex items-center justify-between md:justify-end gap-2 md:gap-4 w-full md:w-auto">
+            <div className="hidden md:flex items-center gap-2 mr-4">
+               <span className={cn(
+                 "text-xs flex items-center gap-1.5 transition-all",
+                 (saveStatus === 'saved' || saveStatus === 'already-saved') ? "text-green-500 font-bold scale-110" : "text-[var(--muted-foreground)]"
+               )}>
+                  {saveStatus === 'saving' && <Clock className="w-4 h-4 animate-spin" />}
+                  {(saveStatus === 'saved' || saveStatus === 'already-saved') && <CheckSquare className="w-4 h-4" />}
+                  {saveStatus === 'saving' ? 'Saving' : saveStatus === 'already-saved' ? 'Already Saved' : saveStatus === 'saved' ? 'Saved' : 'Auto-saving'}
+               </span>
+            </div>
             <Button variant="ghost" onClick={() => setIsPreview(!isPreview)} className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
               {isPreview ? 'Edit Mode' : 'Preview Mode'}
             </Button>
@@ -1255,7 +1285,9 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'already-saved'>('idle');
+  const [lastLoggedHash, setLastLoggedHash] = useState('');
+  const isSavingRef = useRef(false);
 
   const moodOptions = [
     { value: 1, emoji: '😢', label: 'Very Sad' },
@@ -1266,8 +1298,17 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
   ];
 
   const handleLogMood = async () => {
-    if (!selectedMood || isSaving) return;
-    setIsSaving(true);
+    if (!selectedMood || isSavingRef.current) return;
+
+    const currentHash = `${selectedMood}-${note}`;
+    if (currentHash === lastLoggedHash) {
+      setSaveStatus('already-saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      return;
+    }
+
+    isSavingRef.current = true;
+    setSaveStatus('saving');
     const moodObj = moodOptions.find(m => m.value === selectedMood);
     try {
       await addDoc(collection(db, 'moodLogs'), {
@@ -1277,12 +1318,16 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
         createdAt: serverTimestamp(),
         userId
       });
+      setLastLoggedHash(currentHash);
       setSelectedMood(null);
       setNote('');
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'moodLogs');
+      setSaveStatus('idle');
     } finally {
-      setIsSaving(false);
+      isSavingRef.current = false;
     }
   };
 
@@ -1426,11 +1471,29 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
         
         <Button 
           size="lg" 
-          className="w-full py-5 md:py-6 text-xs md:text-sm uppercase tracking-widest font-bold" 
-          disabled={!selectedMood || isSaving}
+          className="w-full py-5 md:py-8 text-xs md:text-base uppercase tracking-widest font-bold relative overflow-hidden" 
+          disabled={(!selectedMood && saveStatus !== 'already-saved') || saveStatus === 'saving'}
           onClick={handleLogMood}
         >
-          {isSaving ? 'Logging...' : 'Log Mood'}
+          <span className={cn(
+            "flex items-center gap-2 transition-all",
+            (saveStatus === 'saved' || saveStatus === 'already-saved') ? "opacity-0" : "opacity-100"
+          )}>
+            {saveStatus === 'saving' ? 'Logging...' : 'Log Mood'}
+          </span>
+          {(saveStatus === 'saved' || saveStatus === 'already-saved') && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={cn(
+                "absolute inset-0 flex items-center justify-center text-white font-black text-lg md:text-xl",
+                saveStatus === 'already-saved' ? "bg-amber-500" : "bg-green-500"
+              )}
+            >
+              <CheckSquare className="w-6 h-6 md:w-8 md:h-8 mr-3" />
+              {saveStatus === 'already-saved' ? 'ALREADY SAVED' : 'SAVED'}
+            </motion.div>
+          )}
         </Button>
       </Card>
 
