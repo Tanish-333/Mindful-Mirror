@@ -253,10 +253,15 @@ export default function App() {
   // --- Daily Inspiration Fetch ---
   useEffect(() => {
     const fetchQuote = async () => {
-      setLoadingQuote(true);
-      const quote = await getDailyInspiration();
-      setDailyQuote(quote);
-      setLoadingQuote(false);
+      try {
+        setLoadingQuote(true);
+        const quote = await getDailyInspiration();
+        setDailyQuote(quote);
+      } catch (err) {
+        console.error("Failed to fetch quote in App:", err);
+      } finally {
+        setLoadingQuote(false);
+      }
     };
     fetchQuote();
   }, []);
