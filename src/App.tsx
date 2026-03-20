@@ -175,6 +175,7 @@ export default function App() {
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   // --- Auth & Initial Setup ---
   useEffect(() => {
@@ -351,71 +352,45 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="flex flex-col lg:flex-row min-h-screen bg-[var(--background)]">
-        {/* Left Side: Branding & Info */}
-        <div className="hidden lg:flex flex-col justify-center items-start p-16 xl:p-24 bg-[var(--primary)] text-[var(--primary-foreground)] w-1/2 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-            <Sparkles className="w-[500px] h-[500px] -translate-x-20 -translate-y-20" />
-          </div>
-          
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            className="relative z-10"
+      <div className="flex flex-col min-h-screen bg-[var(--background)]">
+        <AnimatePresence>
+          {showAbout && <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />}
+        </AnimatePresence>
+
+        {/* Top Header for Login Page */}
+        <header className="w-full bg-[var(--card)] border-b border-[var(--border)] p-4 md:p-6 flex items-center justify-between sticky top-0 z-50">
+          <div 
+            className="flex items-center gap-3 cursor-pointer group"
+            onClick={() => setShowAbout(true)}
           >
-            <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-10 shadow-xl border border-white/20">
-              <Sparkles className="w-10 h-10 text-white" />
+            <div className="w-10 h-10 bg-[var(--primary)] rounded-xl flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+              <Sparkles className="w-6 h-6 text-[var(--primary-foreground)]" />
             </div>
-            <h1 className="text-6xl font-bold mb-6 tracking-tighter leading-none">Mindful Mirror</h1>
-            <p className="text-xl opacity-80 mb-12 max-w-lg leading-relaxed font-light">
-              Your digital sanctuary for mental clarity. Reflect on your day, track your emotional journey, and find daily inspiration.
-            </p>
-
-            <div className="grid grid-cols-1 gap-8">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                  <Book className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">Intelligent Journaling</h3>
-                  <p className="opacity-60 text-sm">Express your thoughts with Markdown support and auto-save.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                  <Brain className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">AI-Powered Insights</h3>
-                  <p className="opacity-60 text-sm">Get personalized self-care tips and reflection prompts based on your entries.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                  <Smile className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">Mood Tracking</h3>
-                  <p className="opacity-60 text-sm">Visualize your emotional trends over time with beautiful charts.</p>
-                </div>
-              </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-xl tracking-tight">Mindful Mirror</span>
+              <span className="text-[10px] uppercase tracking-widest text-[var(--muted-foreground)] font-bold">What is this?</span>
             </div>
-          </motion.div>
-        </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setShowAbout(true)}
+              className="hidden md:flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors"
+            >
+              <AlertCircle className="w-4 h-4" />
+              About
+            </button>
+          </div>
+        </header>
 
-        {/* Right Side: Login Form */}
+        {/* Login Form Container */}
         <div className="flex flex-col items-center justify-center flex-1 p-6 md:p-12">
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center max-w-md w-full"
           >
-            <div className="lg:hidden w-16 h-16 bg-[var(--primary)] rounded-xl flex items-center justify-center mx-auto mb-8 shadow-sm">
-              <Sparkles className="w-8 h-8 text-[var(--primary-foreground)]" />
-            </div>
-            <h2 className="text-3xl font-bold mb-2 tracking-tight lg:text-left">Welcome back</h2>
-            <p className="text-[var(--muted-foreground)] mb-10 text-lg leading-relaxed lg:text-left">
+            <h2 className="text-3xl font-bold mb-2 tracking-tight">Welcome back</h2>
+            <p className="text-[var(--muted-foreground)] mb-10 text-lg leading-relaxed">
               {isSigningUp ? 'Create your sanctuary today.' : 'Sign in to continue your reflection.'}
             </p>
             
@@ -512,7 +487,11 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex flex-col md:flex-row min-h-screen bg-[var(--background)]">
+      <div className="flex flex-col min-h-screen bg-[var(--background)]">
+        <AnimatePresence>
+          {showAbout && <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />}
+        </AnimatePresence>
+
         {/* Logout Confirmation Modal */}
         <AnimatePresence>
           {showLogoutConfirm && (
@@ -542,40 +521,55 @@ export default function App() {
             </div>
           )}
         </AnimatePresence>
-        {/* Sidebar / Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 md:relative md:w-64 bg-[var(--card)] border-t md:border-t-0 md:border-r border-[var(--border)] z-50">
-          <div className="flex md:flex-col items-center md:items-stretch justify-around md:justify-start h-16 md:h-full p-2 md:p-4 gap-2">
-            <div className="hidden md:flex items-center gap-3 mb-8 px-2">
-              <div className="w-8 h-8 bg-[var(--primary)] rounded-lg flex items-center justify-center shadow-sm">
-                <Sparkles className="w-5 h-5 text-[var(--primary-foreground)]" />
+
+        {/* Top Navigation */}
+        <nav className="sticky top-0 w-full bg-[var(--card)] border-b border-[var(--border)] z-50">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
+            <div 
+              className="flex items-center gap-3 cursor-pointer group"
+              onClick={() => setShowAbout(true)}
+            >
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-[var(--primary)] rounded-lg flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-[var(--primary-foreground)]" />
               </div>
-              <span className="font-bold text-xl tracking-tight">Mindful Mirror</span>
+              <div className="flex flex-col">
+                <span className="font-bold text-lg md:text-xl tracking-tight">Mindful Mirror</span>
+                <span className="hidden md:block text-[9px] uppercase tracking-widest text-[var(--muted-foreground)] font-bold">About App</span>
+              </div>
             </div>
             
-            <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard />} label="Dashboard" />
-            <NavButton active={activeTab === 'journal'} onClick={() => setActiveTab('journal')} icon={<Book />} label="Journal" />
-            <NavButton active={activeTab === 'mood'} onClick={() => setActiveTab('mood')} icon={<Smile />} label="Mood" />
-            <NavButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare />} label="Tasks" />
-            <NavButton active={activeTab === 'inspiration'} onClick={() => setActiveTab('inspiration')} icon={<Quote />} label="Inspiration" />
-            <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings />} label="Settings" />
-            
-            <div className="mt-auto hidden md:block">
-              <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3">
-                <LogOut className="w-5 h-5" />
-                Logout
-              </Button>
+            <div className="flex items-center gap-1 md:gap-4">
+              <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard />} label="Dashboard" />
+              <NavButton active={activeTab === 'journal'} onClick={() => setActiveTab('journal')} icon={<Book />} label="Journal" />
+              <NavButton active={activeTab === 'mood'} onClick={() => setActiveTab('mood')} icon={<Smile />} label="Mood" />
+              <div className="hidden lg:flex items-center gap-1">
+                <NavButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare />} label="Tasks" />
+                <NavButton active={activeTab === 'inspiration'} onClick={() => setActiveTab('inspiration')} icon={<Quote />} label="Inspiration" />
+                <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings />} label="Settings" />
+              </div>
+              
+              {/* Mobile Menu Toggle or more buttons */}
+              <div className="lg:hidden">
+                <NavButton active={['tasks', 'inspiration', 'settings'].includes(activeTab)} onClick={() => setActiveTab('settings')} icon={<Settings />} label="More" />
+              </div>
+
+              <div className="hidden md:block ml-4 border-l border-[var(--border)] pl-4">
+                <Button variant="ghost" onClick={handleLogout} className="p-2 rounded-full">
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
             </div>
           </div>
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
               {activeTab === 'dashboard' && (
@@ -610,15 +604,97 @@ function NavButton({ active, onClick, icon, label }: { active: boolean; onClick:
     <button
       onClick={onClick}
       className={cn(
-        "flex flex-col md:flex-row items-center justify-center gap-1 md:gap-3 px-1 py-1 md:px-4 md:py-2.5 rounded-xl transition-all w-full",
+        "flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 py-1 md:px-3 md:py-2 rounded-xl transition-all",
         active 
           ? "bg-[var(--primary)] text-[var(--primary-foreground)] font-medium shadow-sm" 
           : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
       )}
     >
-      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5 md:w-5 md:h-5" })}
-      <span className="text-[10px] md:text-sm font-bold uppercase tracking-tighter md:tracking-normal md:capitalize">{label}</span>
+      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-4 h-4 md:w-5 md:h-5" })}
+      <span className="text-[9px] md:text-xs font-bold uppercase tracking-tight md:tracking-normal">{label}</span>
     </button>
+  );
+}
+
+function AboutModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-2xl"
+      >
+        <Card className="p-8 relative overflow-hidden bg-[var(--primary)] text-[var(--primary-foreground)] border-none shadow-2xl">
+          <button 
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 transition-colors z-20"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          
+          <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+            <Sparkles className="w-[500px] h-[500px] -translate-x-20 -translate-y-20" />
+          </div>
+          
+          <div className="relative z-10">
+            <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-8 shadow-xl border border-white/20">
+              <Sparkles className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-4xl font-bold mb-4 tracking-tighter leading-none">Mindful Mirror</h1>
+            <p className="text-lg opacity-80 mb-10 max-w-lg leading-relaxed font-light">
+              Your digital sanctuary for mental clarity. Reflect on your day, track your emotional journey, and find daily inspiration.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Book className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold">Intelligent Journaling</h3>
+                  <p className="opacity-60 text-xs">Express your thoughts with Markdown support and auto-save.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Brain className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold">AI-Powered Insights</h3>
+                  <p className="opacity-60 text-xs">Get personalized self-care tips and reflection prompts.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Smile className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold">Mood Tracking</h3>
+                  <p className="opacity-60 text-xs">Visualize your emotional trends over time with beautiful charts.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold">Daily Inspiration</h3>
+                  <p className="opacity-60 text-xs">Receive curated quotes and affirmations to start your day.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-10">
+              <Button onClick={onClose} variant="outline" className="border-white/20 hover:bg-white/10 text-white font-bold uppercase tracking-widest text-[10px] py-6 px-10">
+                Close
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
   );
 }
 
