@@ -56,7 +56,9 @@ import {
   EyeOff,
   Heart,
   Brain,
-  Zap
+  Zap,
+  Menu,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -176,6 +178,7 @@ export default function App() {
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // --- Auth & Initial Setup ---
   useEffect(() => {
@@ -527,7 +530,10 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
             <div 
               className="flex items-center gap-3 cursor-pointer group"
-              onClick={() => setShowAbout(true)}
+              onClick={() => {
+                setShowAbout(true);
+                setIsMobileMenuOpen(false);
+              }}
             >
               <div className="w-8 h-8 md:w-10 md:h-10 bg-[var(--primary)] rounded-lg flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
                 <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-[var(--primary-foreground)]" />
@@ -538,28 +544,93 @@ export default function App() {
               </div>
             </div>
             
-            <div className="flex items-center gap-1 md:gap-4">
+            {/* Desktop Navigation */}
+            <div className="hidden lg:flex items-center gap-2">
               <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard />} label="Dashboard" />
               <NavButton active={activeTab === 'journal'} onClick={() => setActiveTab('journal')} icon={<Book />} label="Journal" />
               <NavButton active={activeTab === 'mood'} onClick={() => setActiveTab('mood')} icon={<Smile />} label="Mood" />
-              <div className="hidden lg:flex items-center gap-1">
-                <NavButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare />} label="Tasks" />
-                <NavButton active={activeTab === 'inspiration'} onClick={() => setActiveTab('inspiration')} icon={<Quote />} label="Inspiration" />
-                <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings />} label="Settings" />
-              </div>
+              <NavButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare />} label="Tasks" />
+              <NavButton active={activeTab === 'inspiration'} onClick={() => setActiveTab('inspiration')} icon={<Quote />} label="Inspiration" />
+              <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings />} label="Settings" />
               
-              {/* Mobile Menu Toggle or more buttons */}
-              <div className="lg:hidden">
-                <NavButton active={['tasks', 'inspiration', 'settings'].includes(activeTab)} onClick={() => setActiveTab('settings')} icon={<Settings />} label="More" />
-              </div>
-
-              <div className="hidden md:block ml-4 border-l border-[var(--border)] pl-4">
+              <div className="ml-4 border-l border-[var(--border)] pl-4">
                 <Button variant="ghost" onClick={handleLogout} className="p-2 rounded-full">
                   <LogOut className="w-5 h-5" />
                 </Button>
               </div>
             </div>
+
+            {/* Mobile Menu Button */}
+            <div className="lg:hidden flex items-center gap-2">
+              <button 
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 rounded-xl bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors"
+                aria-label="Toggle menu"
+              >
+                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+            </div>
           </div>
+
+          {/* Mobile Navigation Overlay */}
+          <AnimatePresence>
+            {isMobileMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="lg:hidden bg-[var(--card)] border-b border-[var(--border)] overflow-hidden"
+              >
+                <div className="flex flex-col p-4 gap-2">
+                  <MobileNavButton 
+                    active={activeTab === 'dashboard'} 
+                    onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }} 
+                    icon={<LayoutDashboard />} 
+                    label="Dashboard" 
+                  />
+                  <MobileNavButton 
+                    active={activeTab === 'journal'} 
+                    onClick={() => { setActiveTab('journal'); setIsMobileMenuOpen(false); }} 
+                    icon={<Book />} 
+                    label="Journal" 
+                  />
+                  <MobileNavButton 
+                    active={activeTab === 'mood'} 
+                    onClick={() => { setActiveTab('mood'); setIsMobileMenuOpen(false); }} 
+                    icon={<Smile />} 
+                    label="Mood" 
+                  />
+                  <MobileNavButton 
+                    active={activeTab === 'tasks'} 
+                    onClick={() => { setActiveTab('tasks'); setIsMobileMenuOpen(false); }} 
+                    icon={<CheckSquare />} 
+                    label="Tasks" 
+                  />
+                  <MobileNavButton 
+                    active={activeTab === 'inspiration'} 
+                    onClick={() => { setActiveTab('inspiration'); setIsMobileMenuOpen(false); }} 
+                    icon={<Quote />} 
+                    label="Inspiration" 
+                  />
+                  <MobileNavButton 
+                    active={activeTab === 'settings'} 
+                    onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }} 
+                    icon={<Settings />} 
+                    label="Settings" 
+                  />
+                  <div className="pt-2 mt-2 border-t border-[var(--border)]">
+                    <button 
+                      onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                      className="flex items-center gap-3 w-full p-4 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold uppercase tracking-widest text-xs transition-colors"
+                    >
+                      <LogOut className="w-5 h-5" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </nav>
 
         {/* Main Content */}
@@ -612,6 +683,23 @@ function NavButton({ active, onClick, icon, label }: { active: boolean; onClick:
     >
       {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-4 h-4 md:w-5 md:h-5" })}
       <span className="text-[9px] md:text-xs font-bold uppercase tracking-tight md:tracking-normal">{label}</span>
+    </button>
+  );
+}
+
+function MobileNavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-4 w-full p-4 rounded-xl transition-all",
+        active 
+          ? "bg-[var(--primary)] text-[var(--primary-foreground)] font-bold shadow-md" 
+          : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+      )}
+    >
+      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-6 h-6" })}
+      <span className="uppercase tracking-widest text-xs font-bold">{label}</span>
     </button>
   );
 }
