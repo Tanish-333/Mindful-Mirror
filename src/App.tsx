@@ -66,6 +66,7 @@ import {
   Bar 
 } from 'recharts';
 import Markdown from 'react-markdown';
+import { Analytics } from '@vercel/analytics/react';
 
 import { db, auth } from './firebase';
 import { JournalEntry, MoodLog, Task, UserPreference, SavedInspiration } from './types';
@@ -436,8 +437,10 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <div className="flex flex-col md:flex-row min-h-screen bg-[var(--background)]">
+    <>
+      <Analytics />
+      <ErrorBoundary>
+        <div className="flex flex-col md:flex-row min-h-screen bg-[var(--background)]">
         {/* Logout Confirmation Modal */}
         <AnimatePresence>
           {showLogoutConfirm && (
@@ -523,8 +526,9 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </main>
-      </div>
-    </ErrorBoundary>
+        </div>
+      </ErrorBoundary>
+    </>
   );
 }
 
@@ -1446,4 +1450,3 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
     </div>
   );
 }
-
