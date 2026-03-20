@@ -43,6 +43,7 @@ import {
   Sun, 
   Moon, 
   ChevronRight, 
+  ChevronLeft,
   Calendar,
   Save,
   Clock,
@@ -888,17 +889,28 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   if (isEditing && currentEntry) {
     return (
       <div className="space-y-6 max-w-4xl mx-auto">
-        <header className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setIsEditing(false)}>Back</Button>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => setIsPreview(!isPreview)}>
-              {isPreview ? 'Edit' : 'Preview'}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center justify-between w-full md:w-auto">
+            <Button variant="ghost" onClick={() => setIsEditing(false)} className="px-2 md:px-4">
+              <ChevronLeft className="w-5 h-5 md:mr-2" />
+              <span className="hidden md:inline">Back to Journal</span>
+              <span className="md:hidden">Back</span>
             </Button>
-            <span className="text-sm text-[var(--muted-foreground)] flex items-center gap-1">
-              {saveStatus === 'saving' && <><Clock className="w-3 h-3 animate-spin" /> Saving...</>}
-              {saveStatus === 'saved' && <><Save className="w-3 h-3" /> Saved</>}
-            </span>
-            <Button onClick={handleSave}>Save Now</Button>
+            <div className="flex items-center gap-2 md:hidden">
+               <span className="text-[10px] text-[var(--muted-foreground)] flex items-center gap-1">
+                  {saveStatus === 'saving' && <Clock className="w-3 h-3 animate-spin" />}
+                  {saveStatus === 'saved' && <Save className="w-3 h-3" />}
+                  {saveStatus === 'saving' ? 'Saving' : 'Saved'}
+               </span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between md:justify-end gap-2 md:gap-4 w-full md:w-auto">
+            <Button variant="ghost" onClick={() => setIsPreview(!isPreview)} className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
+              {isPreview ? 'Edit Mode' : 'Preview Mode'}
+            </Button>
+            <Button onClick={handleSave} className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
+              Save Now
+            </Button>
           </div>
         </header>
 
@@ -906,26 +918,26 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
           <input 
             type="text" 
             placeholder="Entry Title..." 
-            className="text-2xl md:text-3xl font-bold bg-transparent border-none outline-none mb-4 md:mb-6 w-full"
+            className="text-xl md:text-3xl font-bold bg-transparent border-none outline-none mb-4 md:mb-6 w-full"
             value={currentEntry.title}
             onChange={e => setCurrentEntry({ ...currentEntry, title: e.target.value })}
           />
-              <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto pb-2 no-scrollbar">
-                {['Happy', 'Calm', 'Neutral', 'Sad', 'Anxious', 'Productive'].map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setCurrentEntry({ ...currentEntry, mood: m })}
-                    className={cn(
-                      "px-3 py-1.5 md:px-4 md:py-1.5 rounded-full text-[10px] md:text-xs font-bold border transition-all shrink-0 uppercase tracking-widest",
-                      currentEntry.mood === m 
-                        ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)] shadow-sm" 
-                        : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-                    )}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
+          <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto pb-2 no-scrollbar">
+            {['Happy', 'Calm', 'Neutral', 'Sad', 'Anxious', 'Productive'].map(m => (
+              <button
+                key={m}
+                onClick={() => setCurrentEntry({ ...currentEntry, mood: m })}
+                className={cn(
+                  "px-3 py-1.5 md:px-4 md:py-1.5 rounded-full text-[10px] md:text-xs font-bold border transition-all shrink-0 uppercase tracking-widest",
+                  currentEntry.mood === m 
+                    ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)] shadow-sm" 
+                    : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
           {isPreview ? (
             <div className="flex-1 prose dark:prose-invert max-w-none markdown-body text-sm md:text-base">
               <Markdown>{currentEntry.content || ''}</Markdown>
@@ -933,7 +945,7 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
           ) : (
             <textarea 
               placeholder="Start writing your thoughts (Markdown supported)..." 
-              className="flex-1 bg-transparent border-none outline-none resize-none text-base md:text-lg leading-relaxed"
+              className="flex-1 bg-transparent border-none outline-none resize-none text-base md:text-lg leading-relaxed min-h-[40vh]"
               value={currentEntry.content}
               onChange={e => setCurrentEntry({ ...currentEntry, content: e.target.value })}
             />
@@ -1221,20 +1233,22 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
 
       <Card className="p-6 md:p-10 text-center">
         <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-6 md:mb-10">Quick Check-in</h2>
-        <div className="grid grid-cols-3 md:flex md:justify-between gap-3 md:gap-4 mb-8 md:mb-10">
+        <div className="grid grid-cols-5 gap-2 md:gap-4 mb-8 md:mb-10">
           {moodOptions.map(m => (
             <button
               key={m.value}
               onClick={() => setSelectedMood(m.value)}
               className={cn(
-                "flex flex-col items-center gap-2 md:gap-3 p-4 md:p-6 rounded-2xl transition-all flex-1 border border-transparent",
+                "flex flex-col items-center gap-1.5 md:gap-3 p-3 md:p-6 rounded-2xl transition-all flex-1 border border-transparent",
                 selectedMood === m.value 
                   ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md scale-105" 
                   : "bg-[var(--muted)] hover:bg-[var(--border)] text-[var(--foreground)]"
               )}
             >
-              <span className="text-3xl md:text-5xl">{m.emoji}</span>
-              <span className="text-[9px] font-bold uppercase tracking-widest hidden md:block">{m.label}</span>
+              <span className="text-2xl md:text-5xl">{m.emoji}</span>
+              <span className="text-[8px] md:text-[9px] font-bold uppercase tracking-tighter md:tracking-widest leading-none text-center">
+                {m.label.split(' ').map((word, i) => <span key={i} className="block md:inline">{word} </span>)}
+              </span>
             </button>
           ))}
         </div>
