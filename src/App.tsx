@@ -535,14 +535,14 @@ function NavButton({ active, onClick, icon, label }: { active: boolean; onClick:
     <button
       onClick={onClick}
       className={cn(
-        "flex flex-col md:flex-row items-center gap-1 md:gap-3 px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all w-full",
+        "flex flex-col md:flex-row items-center justify-center gap-1 md:gap-3 px-1 py-1 md:px-4 md:py-2.5 rounded-xl transition-all w-full",
         active 
           ? "bg-[var(--primary)] text-[var(--primary-foreground)] font-medium shadow-sm" 
           : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
       )}
     >
-      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" })}
-      <span className="text-[10px] md:text-sm font-medium">{label}</span>
+      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5 md:w-5 md:h-5" })}
+      <span className="text-[10px] md:text-sm font-bold uppercase tracking-tighter md:tracking-normal md:capitalize">{label}</span>
     </button>
   );
 }
@@ -557,21 +557,21 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
   const pendingTasks = tasks.length - completedTasks;
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
+    <div className="space-y-6 md:space-y-8 max-w-6xl mx-auto">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight">Overview</h1>
-          <p className="text-[var(--muted-foreground)] mt-1">A summary of your recent wellness and productivity.</p>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Overview</h1>
+          <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">A summary of your recent wellness and productivity.</p>
         </div>
-        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || entries.length === 0} className="gap-2">
+        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || entries.length === 0} className="gap-2 w-full md:w-auto py-5 md:py-2">
           <Sparkles className={cn("w-4 h-4", loadingInsights && "animate-spin")} />
           {loadingInsights ? "Analyzing..." : "AI Analysis"}
         </Button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         {/* Daily Quote Card */}
-        <Card className="md:col-span-2 p-8 bg-[var(--primary)] text-[var(--primary-foreground)] border-none relative overflow-hidden">
+        <Card className="md:col-span-2 p-6 md:p-8 bg-[var(--primary)] text-[var(--primary-foreground)] border-none relative overflow-hidden">
           {loadingQuote && !quote && (
             <div className="absolute inset-0 bg-black/10 backdrop-blur-[2px] flex items-center justify-center z-10">
               <Sparkles className="w-8 h-8 animate-pulse opacity-50" />
@@ -579,21 +579,21 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
           )}
           <div className="flex flex-col h-full justify-between">
             <div>
-              <Quote className="w-8 h-8 opacity-20 mb-6" />
+              <Quote className="w-6 h-6 md:w-8 md:h-8 opacity-20 mb-4 md:mb-6" />
               <p className={cn(
-                "text-2xl md:text-3xl font-serif italic mb-6 leading-tight tracking-tight transition-opacity duration-500",
+                "text-xl md:text-3xl font-serif italic mb-4 md:mb-6 leading-tight tracking-tight transition-opacity duration-500",
                 loadingQuote && !quote ? "opacity-0" : "opacity-100"
               )}>
                 "{quote?.quote || "The best way to predict the future is to create it."}"
               </p>
               <p className={cn(
-                "text-[var(--primary-foreground)] opacity-70 font-medium transition-opacity duration-500",
+                "text-[var(--primary-foreground)] opacity-70 font-medium text-sm md:text-base transition-opacity duration-500",
                 loadingQuote && !quote ? "opacity-0" : "opacity-100"
               )}>
                 — {quote?.author || "Peter Drucker"}
               </p>
             </div>
-            <div className="mt-8 flex items-center gap-2 text-xs uppercase tracking-widest opacity-50">
+            <div className="mt-6 md:mt-8 flex items-center gap-2 text-[10px] uppercase tracking-widest opacity-50">
               <Star className="w-3 h-3 fill-current" />
               <span>Daily Reflection</span>
             </div>
@@ -601,20 +601,20 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
         </Card>
 
         {/* Stats Card */}
-        <Card className="p-8">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-6 flex items-center gap-2">
+        <Card className="p-6 md:p-8">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-4 md:mb-6 flex items-center gap-2">
             <CheckSquare className="w-4 h-4" />
             Productivity
           </h3>
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div className="flex justify-between items-baseline">
               <div>
-                <p className="text-4xl font-bold">{completedTasks}</p>
-                <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider mt-1">Completed</p>
+                <p className="text-3xl md:text-4xl font-bold">{completedTasks}</p>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider mt-1">Completed</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-[var(--muted-foreground)]">{pendingTasks}</p>
-                <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider mt-1">Pending</p>
+                <p className="text-xl md:text-2xl font-bold text-[var(--muted-foreground)]">{pendingTasks}</p>
+                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider mt-1">Pending</p>
               </div>
             </div>
             <div className="h-1.5 bg-[var(--muted)] rounded-full overflow-hidden">
@@ -627,14 +627,14 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Mood Trends */}
-        <Card className="p-8">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-8 flex items-center gap-2">
+        <Card className="p-6 md:p-8">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-6 md:mb-8 flex items-center gap-2">
             <Smile className="w-4 h-4" />
             Mood Trends
           </h3>
-          <div className="h-64 w-full">
+          <div className="h-48 md:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={moodData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
@@ -642,21 +642,21 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} 
+                  tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} 
                 />
                 <YAxis 
                   domain={[1, 5]} 
                   axisLine={false} 
                   tickLine={false} 
                   ticks={[1, 2, 3, 4, 5]}
-                  tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+                  tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'var(--card)', 
                     borderColor: 'var(--border)', 
                     borderRadius: '8px',
-                    fontSize: '12px',
+                    fontSize: '11px',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
                   }}
                 />
@@ -665,8 +665,8 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
                   dataKey="mood" 
                   stroke="var(--primary)" 
                   strokeWidth={2} 
-                  dot={{ r: 3, fill: 'var(--primary)', strokeWidth: 0 }}
-                  activeDot={{ r: 5, strokeWidth: 0 }}
+                  dot={{ r: 2, fill: 'var(--primary)', strokeWidth: 0 }}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -674,22 +674,22 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
         </Card>
 
         {/* AI Insights Card */}
-        <Card className="p-8">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-6 flex items-center gap-2">
+        <Card className="p-6 md:p-8">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-4 md:mb-6 flex items-center gap-2">
             <Sparkles className="w-4 h-4" />
             AI Analysis
           </h3>
           {insights ? (
-            <div className="space-y-6">
-              <div className="p-5 bg-[var(--muted)] rounded-lg border border-[var(--border)]">
-                <p className="text-[10px] font-bold text-[var(--muted-foreground)] mb-3 uppercase tracking-widest">Reflection Prompt</p>
-                <p className="text-[var(--foreground)] italic font-medium leading-relaxed">"{insights.prompt}"</p>
+            <div className="space-y-4 md:space-y-6">
+              <div className="p-4 md:p-5 bg-[var(--muted)] rounded-xl border border-[var(--border)]">
+                <p className="text-[9px] font-bold text-[var(--muted-foreground)] mb-2 md:mb-3 uppercase tracking-widest">Reflection Prompt</p>
+                <p className="text-[var(--foreground)] italic font-medium leading-relaxed text-sm md:text-base">"{insights.prompt}"</p>
               </div>
-              <div className="space-y-3">
-                <p className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-widest">Recommendations</p>
-                <ul className="space-y-3">
+              <div className="space-y-2 md:space-y-3">
+                <p className="text-[9px] font-bold text-[var(--muted-foreground)] uppercase tracking-widest">Recommendations</p>
+                <ul className="space-y-2 md:space-y-3">
                   {insights.tips.map((tip: string, i: number) => (
-                    <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
+                    <li key={i} className="flex items-start gap-3 text-xs md:text-sm leading-relaxed">
                       <div className="w-1 h-1 rounded-full bg-[var(--primary)] mt-2 shrink-0" />
                       {tip}
                     </li>
@@ -698,9 +698,9 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-              <Sparkles className="w-10 h-10 text-[var(--muted)] mb-4 opacity-50" />
-              <p className="text-sm text-[var(--muted-foreground)] max-w-[200px]">
+            <div className="flex flex-col items-center justify-center h-full py-8 md:py-12 text-center">
+              <Sparkles className="w-8 h-8 md:w-10 md:h-10 text-[var(--muted)] mb-4 opacity-50" />
+              <p className="text-xs md:text-sm text-[var(--muted-foreground)] max-w-[200px]">
                 {entries.length === 0 
                   ? "Begin journaling to enable personalized AI analysis." 
                   : "Analyze your recent activity for deeper insights."}
@@ -804,21 +804,21 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
           </div>
         </header>
 
-        <Card className="p-6 md:p-8 min-h-[60vh] flex flex-col">
+        <Card className="p-5 md:p-8 min-h-[60vh] flex flex-col">
           <input 
             type="text" 
             placeholder="Entry Title..." 
-            className="text-3xl font-bold bg-transparent border-none outline-none mb-6 w-full"
+            className="text-2xl md:text-3xl font-bold bg-transparent border-none outline-none mb-4 md:mb-6 w-full"
             value={currentEntry.title}
             onChange={e => setCurrentEntry({ ...currentEntry, title: e.target.value })}
           />
-              <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
+              <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto pb-2 no-scrollbar">
                 {['Happy', 'Calm', 'Neutral', 'Sad', 'Anxious', 'Productive'].map(m => (
                   <button
                     key={m}
                     onClick={() => setCurrentEntry({ ...currentEntry, mood: m })}
                     className={cn(
-                      "px-4 py-1.5 rounded-full text-xs font-medium border transition-all shrink-0 uppercase tracking-wider",
+                      "px-3 py-1.5 md:px-4 md:py-1.5 rounded-full text-[10px] md:text-xs font-bold border transition-all shrink-0 uppercase tracking-widest",
                       currentEntry.mood === m 
                         ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)] shadow-sm" 
                         : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
@@ -829,13 +829,13 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
                 ))}
               </div>
           {isPreview ? (
-            <div className="flex-1 prose dark:prose-invert max-w-none markdown-body">
+            <div className="flex-1 prose dark:prose-invert max-w-none markdown-body text-sm md:text-base">
               <Markdown>{currentEntry.content || ''}</Markdown>
             </div>
           ) : (
             <textarea 
               placeholder="Start writing your thoughts (Markdown supported)..." 
-              className="flex-1 bg-transparent border-none outline-none resize-none text-lg leading-relaxed"
+              className="flex-1 bg-transparent border-none outline-none resize-none text-base md:text-lg leading-relaxed"
               value={currentEntry.content}
               onChange={e => setCurrentEntry({ ...currentEntry, content: e.target.value })}
             />
@@ -847,12 +847,12 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Journal</h1>
           <p className="text-[var(--muted-foreground)]">Your personal collection of thoughts.</p>
         </div>
-        <Button onClick={handleNew} className="gap-2">
+        <Button onClick={handleNew} className="gap-2 w-full md:w-auto py-5 md:py-2">
           <Plus className="w-5 h-5" />
           New Entry
         </Button>
@@ -968,10 +968,10 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
   };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div className="space-y-6 md:space-y-8 max-w-4xl mx-auto">
       <header>
-        <h1 className="text-4xl font-bold tracking-tight">Mood Tracker</h1>
-        <p className="text-[var(--muted-foreground)] mt-1">Reflect on your current emotional state.</p>
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Mood Tracker</h1>
+        <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">Reflect on your current emotional state.</p>
       </header>
 
       <AnimatePresence>
@@ -1000,36 +1000,36 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
         )}
       </AnimatePresence>
 
-      <Card className="p-10 text-center">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-10">Quick Check-in</h2>
-        <div className="flex justify-between gap-4 mb-10">
+      <Card className="p-6 md:p-10 text-center">
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] mb-6 md:mb-10">Quick Check-in</h2>
+        <div className="grid grid-cols-3 md:flex md:justify-between gap-3 md:gap-4 mb-8 md:mb-10">
           {moodOptions.map(m => (
             <button
               key={m.value}
               onClick={() => setSelectedMood(m.value)}
               className={cn(
-                "flex flex-col items-center gap-3 p-6 rounded-2xl transition-all flex-1 border border-transparent",
+                "flex flex-col items-center gap-2 md:gap-3 p-4 md:p-6 rounded-2xl transition-all flex-1 border border-transparent",
                 selectedMood === m.value 
                   ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md scale-105" 
                   : "bg-[var(--muted)] hover:bg-[var(--border)] text-[var(--foreground)]"
               )}
             >
-              <span className="text-4xl md:text-5xl">{m.emoji}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest hidden md:block">{m.label}</span>
+              <span className="text-3xl md:text-5xl">{m.emoji}</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest hidden md:block">{m.label}</span>
             </button>
           ))}
         </div>
         
         <textarea
           placeholder="Add a brief note about your day..."
-          className="w-full p-5 rounded-lg bg-[var(--muted)] border border-[var(--border)] outline-none resize-none mb-8 h-32 focus:ring-1 focus:ring-[var(--primary)] transition-all"
+          className="w-full p-4 md:p-5 rounded-xl bg-[var(--muted)] border border-[var(--border)] outline-none resize-none mb-6 md:mb-8 h-24 md:h-32 focus:ring-1 focus:ring-[var(--primary)] transition-all text-sm md:text-base"
           value={note}
           onChange={e => setNote(e.target.value)}
         />
         
         <Button 
           size="lg" 
-          className="w-full py-6 text-sm uppercase tracking-widest font-bold" 
+          className="w-full py-5 md:py-6 text-xs md:text-sm uppercase tracking-widest font-bold" 
           disabled={!selectedMood}
           onClick={handleLogMood}
         >
@@ -1038,22 +1038,22 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
       </Card>
 
       <div className="space-y-6">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] flex items-center gap-2">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] flex items-center gap-2">
           <Clock className="w-4 h-4" />
           Recent History
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {moods.map(log => (
-            <Card key={log.id} className="p-6 flex items-center gap-5 group relative">
-              <span className="text-4xl">{log.emoji}</span>
-              <div className="flex-1">
+            <Card key={log.id} className="p-5 md:p-6 flex items-center gap-4 md:gap-5 group relative">
+              <span className="text-3xl md:text-4xl">{log.emoji}</span>
+              <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center mb-1">
-                  <p className="font-bold text-lg tracking-tight">{moodOptions.find(m => m.value === log.mood)?.label}</p>
-                  <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-widest">
+                  <p className="font-bold text-base md:text-lg tracking-tight truncate">{moodOptions.find(m => m.value === log.mood)?.label}</p>
+                  <span className="text-[9px] md:text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-widest shrink-0">
                     {log.createdAt ? format(log.createdAt.toDate(), 'MMM d, h:mm a') : 'Just now'}
                   </span>
                 </div>
-                {log.note && <p className="text-sm text-[var(--muted-foreground)] leading-relaxed italic">"{log.note}"</p>}
+                {log.note && <p className="text-xs md:text-sm text-[var(--muted-foreground)] leading-relaxed italic line-clamp-2">"{log.note}"</p>}
               </div>
               <button 
                 onClick={() => setDeleteConfirmId(log.id!)}
@@ -1063,6 +1063,12 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
               </button>
             </Card>
           ))}
+          {moods.length === 0 && (
+            <div className="col-span-full py-16 md:py-20 text-center bg-[var(--muted)]/20 rounded-2xl border-2 border-dashed border-[var(--border)]">
+              <Smile className="w-10 h-10 md:w-12 md:h-12 text-[var(--muted)] mx-auto mb-4" />
+              <p className="text-xs md:text-sm text-[var(--muted-foreground)]">No mood logs yet. Start tracking your journey.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1109,23 +1115,23 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
   };
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
+    <div className="space-y-6 md:space-y-8 max-w-3xl mx-auto">
       <header>
         <h1 className="text-3xl font-bold">Productivity Hub</h1>
-        <p className="text-[var(--muted-foreground)]">Stay organized and focused on your goals.</p>
+        <p className="text-[var(--muted-foreground)] text-sm md:text-base">Stay organized and focused on your goals.</p>
       </header>
 
-      <Card className="p-6">
-        <form onSubmit={handleAddTask} className="flex flex-col md:flex-row gap-4">
+      <Card className="p-5 md:p-6">
+        <form onSubmit={handleAddTask} className="flex flex-col md:flex-row gap-3 md:gap-4">
           <input
             type="text"
             placeholder="What needs to be done?"
-            className="flex-1 bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all"
+            className="flex-1 bg-[var(--muted)] px-4 md:px-5 py-3 rounded-xl outline-none border border-transparent focus:border-[var(--accent)] transition-all text-sm md:text-base"
             value={newTask}
             onChange={e => setNewTask(e.target.value)}
           />
           <select 
-            className="bg-[var(--muted)] px-5 py-3 rounded-lg outline-none border border-transparent focus:border-[var(--accent)] transition-all text-sm font-medium"
+            className="bg-[var(--muted)] px-4 md:px-5 py-3 rounded-xl outline-none border border-transparent focus:border-[var(--accent)] transition-all text-xs md:text-sm font-bold uppercase tracking-widest"
             value={priority}
             onChange={e => setPriority(e.target.value as any)}
           >
@@ -1133,30 +1139,30 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
             <option value="medium">Medium Priority</option>
             <option value="high">High Priority</option>
           </select>
-          <Button type="submit" className="px-8 py-3 uppercase tracking-widest text-xs font-bold">Add Task</Button>
+          <Button type="submit" className="px-8 py-3.5 md:py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold w-full md:w-auto">Add Task</Button>
         </form>
       </Card>
 
       <div className="space-y-3">
         {tasks.map(task => (
           <motion.div layout key={task.id}>
-            <Card className={cn("p-5 flex items-center gap-5 group transition-all", task.completed && "opacity-50")}>
+            <Card className={cn("p-4 md:p-5 flex items-center gap-4 md:gap-5 group transition-all", task.completed && "opacity-50")}>
               <button 
                 onClick={() => toggleTask(task)}
                 className={cn(
-                  "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
+                  "w-5 h-5 md:w-6 md:h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0",
                   task.completed 
                     ? "bg-[var(--primary)] border-[var(--primary)] text-[var(--primary-foreground)]" 
                     : "border-[var(--border)] hover:border-[var(--accent)]"
                 )}
               >
-                {task.completed && <CheckSquare className="w-4 h-4" />}
+                {task.completed && <CheckSquare className="w-3.5 h-3.5 md:w-4 md:h-4" />}
               </button>
               <div className="flex-1 min-w-0">
-                <p className={cn("font-medium text-lg tracking-tight truncate", task.completed && "line-through text-[var(--muted-foreground)]")}>{task.title}</p>
+                <p className={cn("font-bold text-base md:text-lg tracking-tight truncate", task.completed && "line-through text-[var(--muted-foreground)]")}>{task.title}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={cn(
-                    "text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded",
+                    "text-[8px] md:text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded",
                     task.priority === 'high' ? "bg-stone-100 text-stone-600 dark:bg-stone-800" : 
                     task.priority === 'medium' ? "bg-stone-100 text-stone-600 dark:bg-stone-800" : 
                     "bg-stone-100 text-stone-600 dark:bg-stone-800"
@@ -1167,7 +1173,7 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
               </div>
               <button 
                 onClick={() => deleteTask(task.id!)}
-                className="opacity-0 group-hover:opacity-100 p-2 text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-2 text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -1175,9 +1181,9 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
           </motion.div>
         ))}
         {tasks.length === 0 && (
-          <div className="py-20 text-center">
-            <CheckSquare className="w-16 h-16 text-[var(--muted)] mx-auto mb-4" />
-            <p className="text-[var(--muted-foreground)]">Your task list is empty. Time to plan!</p>
+          <div className="py-16 md:py-20 text-center bg-[var(--muted)]/20 rounded-2xl border-2 border-dashed border-[var(--border)]">
+            <CheckSquare className="w-10 h-10 md:w-12 md:h-12 text-[var(--muted)] mx-auto mb-4" />
+            <p className="text-xs md:text-sm text-[var(--muted-foreground)]">Your task list is empty. Time to plan!</p>
           </div>
         )}
       </div>
@@ -1232,8 +1238,8 @@ function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedIns
   };
 
   return (
-    <div className="space-y-8">
-      <header className="flex items-center justify-between">
+    <div className="space-y-6 md:space-y-8">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Inspiration</h1>
           <p className="text-[var(--muted-foreground)]">Daily wisdom to fuel your journey.</p>
@@ -1243,7 +1249,7 @@ function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedIns
             variant="outline" 
             size="sm"
             onClick={() => setShowClearConfirm(true)}
-            className="text-xs uppercase tracking-widest font-bold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30"
+            className="text-[10px] uppercase tracking-widest font-bold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30 w-full md:w-auto py-4 md:py-2"
           >
             Clear All
           </Button>
@@ -1276,23 +1282,23 @@ function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedIns
         )}
       </AnimatePresence>
 
-      <Card className="p-10 md:p-16 bg-[var(--primary)] text-[var(--primary-foreground)] text-center relative overflow-hidden border-none">
+      <Card className="p-8 md:p-16 bg-[var(--primary)] text-[var(--primary-foreground)] text-center relative overflow-hidden border-none">
         <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
-          <Quote className="w-96 h-96 -translate-x-20 -translate-y-20" />
+          <Quote className="w-48 h-48 md:w-96 md:h-96 -translate-x-10 -translate-y-10 md:-translate-x-20 md:-translate-y-20" />
         </div>
         <div className="relative z-10 max-w-3xl mx-auto">
-          <p className="text-3xl md:text-5xl font-serif italic mb-10 leading-tight tracking-tight">
+          <p className="text-2xl md:text-5xl font-serif italic mb-6 md:mb-10 leading-tight tracking-tight">
             "{quote?.quote || "Loading your daily inspiration..."}"
           </p>
-          <p className="text-[var(--primary-foreground)] opacity-70 text-xl mb-12 font-medium">— {quote?.author || "..."}</p>
-          <div className="p-8 bg-white/5 backdrop-blur-sm rounded-xl mb-12 text-left border border-white/10">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary-foreground)] opacity-50 mb-3">Daily Reflection Tip</p>
-            <p className="text-xl leading-relaxed font-light">{quote?.tip || "..."}</p>
+          <p className="text-[var(--primary-foreground)] opacity-70 text-base md:text-xl mb-8 md:mb-12 font-medium">— {quote?.author || "..."}</p>
+          <div className="p-5 md:p-8 bg-white/5 backdrop-blur-sm rounded-2xl mb-8 md:mb-12 text-left border border-white/10">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--primary-foreground)] opacity-50 mb-2 md:mb-3">Daily Reflection Tip</p>
+            <p className="text-lg md:text-xl leading-relaxed font-light">{quote?.tip || "..."}</p>
           </div>
           <Button 
             variant="outline" 
             className={cn(
-              "bg-transparent border-white/20 text-white hover:bg-white/10 px-10 py-6 text-xs uppercase tracking-widest font-bold",
+              "bg-transparent border-white/20 text-white hover:bg-white/10 w-full md:w-auto px-10 py-6 text-[10px] uppercase tracking-widest font-bold",
               isAlreadySaved && "bg-white/10"
             )}
             onClick={handleSave}
@@ -1305,22 +1311,22 @@ function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedIns
       </Card>
 
       <div className="space-y-6">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)] flex items-center gap-2">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] flex items-center gap-2">
           <Star className="w-4 h-4" />
           Saved Favorites ({saved.length})
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {saved.map(s => (
-            <Card key={s.id} className="p-8 border-l-4 border-l-[var(--primary)]">
-              <Quote className="w-6 h-6 opacity-10 mb-4" />
-              <p className="text-xl font-serif italic mb-4 leading-snug tracking-tight">"{s.quote}"</p>
-              <p className="text-sm font-bold text-[var(--muted-foreground)] uppercase tracking-widest">— {s.author}</p>
+            <Card key={s.id} className="p-6 md:p-8 border-l-4 border-l-[var(--primary)]">
+              <Quote className="w-5 h-5 md:w-6 md:h-6 opacity-10 mb-3 md:mb-4" />
+              <p className="text-lg md:text-xl font-serif italic mb-3 md:mb-4 leading-snug tracking-tight">"{s.quote}"</p>
+              <p className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-widest">— {s.author}</p>
             </Card>
           ))}
           {saved.length === 0 && (
-            <div className="col-span-full py-20 text-center bg-[var(--muted)]/20 rounded-2xl border-2 border-dashed border-[var(--border)]">
-              <Star className="w-12 h-12 text-[var(--muted)] mx-auto mb-4" />
-              <p className="text-[var(--muted-foreground)]">No favorites yet. Save a quote to see it here.</p>
+            <div className="col-span-full py-16 md:py-20 text-center bg-[var(--muted)]/20 rounded-2xl border-2 border-dashed border-[var(--border)]">
+              <Star className="w-10 h-10 md:w-12 md:h-12 text-[var(--muted)] mx-auto mb-4" />
+              <p className="text-xs md:text-sm text-[var(--muted-foreground)]">No favorites yet. Save a quote to see it here.</p>
             </div>
           )}
         </div>
@@ -1353,19 +1359,19 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
   };
 
   return (
-    <div className="space-y-8 max-w-2xl mx-auto">
+    <div className="space-y-6 md:space-y-8 max-w-2xl mx-auto">
       <header>
         <h1 className="text-3xl font-bold">Settings</h1>
         <p className="text-[var(--muted-foreground)]">Personalize your Mindful Mirror experience.</p>
       </header>
 
       <Card className="divide-y divide-[var(--border)] overflow-hidden">
-        <div className="p-8 flex items-center gap-6 bg-[var(--muted)]/30">
+        <div className="p-6 md:p-8 flex flex-col md:flex-row items-center md:items-center gap-4 md:gap-6 bg-[var(--muted)]/30 text-center md:text-left">
           <img src={user.photoURL || ''} alt="" className="w-20 h-20 rounded-full border-4 border-[var(--background)] shadow-sm" />
           <div>
             <p className="font-bold text-2xl tracking-tight">{user.displayName}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-[var(--muted-foreground)] font-medium">{user.email}</p>
+            <div className="flex flex-col md:flex-row items-center gap-2 mt-1">
+              <p className="text-[var(--muted-foreground)] font-medium text-sm md:text-base">{user.email}</p>
               <span className="text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-400">
                 {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 
                  user.providerData[0]?.providerId === 'apple.com' ? 'Apple' : 
@@ -1375,65 +1381,65 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
           </div>
         </div>
 
-        <div className="p-8 space-y-8">
+        <div className="p-6 md:p-8 space-y-6 md:space-y-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
-                {preferences?.theme === 'dark' ? <Moon className="w-6 h-6" /> : <Sun className="w-6 h-6" />}
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="p-2.5 md:p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
+                {preferences?.theme === 'dark' ? <Moon className="w-5 h-5 md:w-6 md:h-6" /> : <Sun className="w-5 h-5 md:w-6 md:h-6" />}
               </div>
               <div>
-                <p className="font-bold text-lg tracking-tight">Dark Mode</p>
-                <p className="text-sm text-[var(--muted-foreground)]">Adjust the interface for low-light environments</p>
+                <p className="font-bold text-base md:text-lg tracking-tight">Dark Mode</p>
+                <p className="text-xs md:text-sm text-[var(--muted-foreground)]">Adjust the interface for low-light</p>
               </div>
             </div>
             <button 
               onClick={toggleTheme}
               className={cn(
-                "w-14 h-7 rounded-full transition-all relative p-1",
+                "w-12 h-6 md:w-14 md:h-7 rounded-full transition-all relative p-1",
                 preferences?.theme === 'dark' ? "bg-[var(--primary)]" : "bg-[var(--border)]"
               )}
             >
               <div className={cn(
-                "w-5 h-5 bg-white rounded-full transition-all shadow-sm",
-                preferences?.theme === 'dark' ? "translate-x-7" : "translate-x-0"
+                "w-4 h-4 md:w-5 md:h-5 bg-white rounded-full transition-all shadow-sm",
+                preferences?.theme === 'dark' ? "translate-x-6 md:translate-x-7" : "translate-x-0"
               )} />
             </button>
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
-                <AlertCircle className="w-6 h-6" />
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="p-2.5 md:p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
+                <AlertCircle className="w-5 h-5 md:w-6 md:h-6" />
               </div>
               <div>
-                <p className="font-bold text-lg tracking-tight">Notifications</p>
-                <p className="text-sm text-[var(--muted-foreground)]">Receive daily reminders and wellness alerts</p>
+                <p className="font-bold text-base md:text-lg tracking-tight">Notifications</p>
+                <p className="text-xs md:text-sm text-[var(--muted-foreground)]">Receive daily reminders</p>
               </div>
             </div>
             <button 
               onClick={toggleNotifications}
               className={cn(
-                "w-14 h-7 rounded-full transition-all relative p-1",
+                "w-12 h-6 md:w-14 md:h-7 rounded-full transition-all relative p-1",
                 preferences?.notificationsEnabled ? "bg-[var(--primary)]" : "bg-[var(--border)]"
               )}
             >
               <div className={cn(
-                "w-5 h-5 bg-white rounded-full transition-all shadow-sm",
-                preferences?.notificationsEnabled ? "translate-x-7" : "translate-x-0"
+                "w-4 h-4 md:w-5 md:h-5 bg-white rounded-full transition-all shadow-sm",
+                preferences?.notificationsEnabled ? "translate-x-6 md:translate-x-7" : "translate-x-0"
               )} />
             </button>
           </div>
         </div>
 
-        <div className="p-8 bg-[var(--muted)]/10">
-          <Button variant="outline" onClick={onLogout} className="w-full py-6 gap-3 text-sm font-bold uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:hover:bg-red-900/20">
+        <div className="p-6 md:p-8 bg-[var(--muted)]/10">
+          <Button variant="outline" onClick={onLogout} className="w-full py-5 md:py-6 gap-3 text-xs md:text-sm font-bold uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:hover:bg-red-900/20">
             <LogOut className="w-5 h-5" />
             Sign Out of Account
           </Button>
         </div>
       </Card>
 
-      <div className="text-center text-[var(--muted-foreground)] text-sm">
+      <div className="text-center text-[var(--muted-foreground)] text-[10px] md:text-sm">
         <p>Mindful Mirror v1.0.0</p>
         <p>© 2026 Mindful Mirror Team</p>
       </div>
