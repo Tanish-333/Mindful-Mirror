@@ -26,9 +26,7 @@ import {
   GoogleAuthProvider, 
   onAuthStateChanged, 
   signOut, 
-  User,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  User
 } from 'firebase/auth';
 import { 
   Book, 
@@ -50,15 +48,13 @@ import {
   Star,
   Quote,
   AlertCircle,
-  Mail,
   Apple,
-  Eye,
-  EyeOff,
   Heart,
   Brain,
-  Zap,
   Menu,
-  X
+  X,
+  RotateCcw,
+  Mic
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -76,8 +72,8 @@ import {
 import Markdown from 'react-markdown';
 
 import { db, auth } from './firebase';
-import { JournalEntry, MoodLog, Task, UserPreference, SavedInspiration } from './types';
-import { getAIInsights, getDailyInspiration } from './services/gemini';
+import { JournalEntry, MoodLog, Task, UserPreference, SavedInspiration, Memory } from './types';
+import { getAIInsights, getDailyInspiration, getAIChatResponse } from './services/gemini';
 import { Card, Button, cn } from './components/ui';
 
 // --- Error Handling ---
@@ -163,16 +159,13 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSigningUp, setIsSigningUp] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [moods, setMoods] = useState<MoodLog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [preferences, setPreferences] = useState<UserPreference | null>(null);
   const [savedInspirations, setSavedInspirations] = useState<SavedInspiration[]>([]);
+  const [memories, setMemories] = useState<Memory[]>([]);
   const [dailyQuote, setDailyQuote] = useState<any>(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [aiInsights, setAiInsights] = useState<any>(null);
@@ -220,6 +213,7 @@ export default function App() {
     const qTasks = query(collection(db, 'tasks'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
     const qPrefs = query(collection(db, 'userPreferences'), where('userId', '==', user.uid), limit(1));
     const qSaved = query(collection(db, 'savedInspirations'), where('userId', '==', user.uid), orderBy('savedAt', 'desc'));
+    const qMemories = query(collection(db, 'memories'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
 
     const unsubEntries = onSnapshot(qEntries, (snap) => {
       setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() } as JournalEntry)));
@@ -252,14 +246,33 @@ export default function App() {
       setSavedInspirations(snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedInspiration)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'savedInspirations'));
 
+    const unsubMemories = onSnapshot(qMemories, (snap) => {
+      setMemories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Memory)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'memories'));
+
     return () => {
       unsubEntries();
       unsubMoods();
       unsubTasks();
       unsubPrefs();
       unsubSaved();
+      unsubMemories();
     };
   }, [user, isAuthReady]);
+
+  // Clear AI insights when data changes to ensure they stay relevant
+  useEffect(() => {
+    if (aiInsights) {
+      setAiInsights(null);
+    }
+  }, [entries.length, moods.length]);
+
+  // Auto-fetch insights when data is available and we don't have them yet
+  useEffect(() => {
+    if (user && !aiInsights && !loadingInsights && (entries.length > 0 || moods.length > 0)) {
+      fetchInsights();
+    }
+  }, [user, entries.length, moods.length, aiInsights, loadingInsights]);
 
   // --- Daily Inspiration Fetch ---
   useEffect(() => {
@@ -305,42 +318,6 @@ export default function App() {
         setLoginError("The login popup was blocked by your browser. Please allow popups for this site.");
       } else {
         setLoginError(`Login failed: ${error.message}`);
-      }
-    }
-  };
-
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-    console.log(`Starting email ${isSigningUp ? 'signup' : 'login'} for: ${email}`);
-    
-    if (!email || !password) {
-      setLoginError("Please enter both email and password.");
-      return;
-    }
-    
-    try {
-      if (isSigningUp) {
-        const result = await createUserWithEmailAndPassword(auth, email, password);
-        console.log("Email signup successful:", result.user.email);
-      } else {
-        const result = await signInWithEmailAndPassword(auth, email, password);
-        console.log("Email login successful:", result.user.email);
-      }
-    } catch (error: any) {
-      console.error("Email auth error:", error);
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        setLoginError("Invalid email or password. If you don't have an account, please click 'Create Account' below.");
-      } else if (error.code === 'auth/email-already-in-use') {
-        setLoginError("This email is already in use. Try signing in instead.");
-      } else if (error.code === 'auth/weak-password') {
-        setLoginError("Password should be at least 6 characters.");
-      } else if (error.code === 'auth/invalid-email') {
-        setLoginError("Please enter a valid email address.");
-      } else if (error.code === 'auth/operation-not-allowed') {
-        setLoginError("Email/Password login is not enabled in Firebase. Please check your console settings.");
-      } else {
-        setLoginError(`Authentication failed: ${error.message}`);
       }
     }
   };
@@ -392,9 +369,9 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center max-w-md w-full"
           >
-            <h2 className="text-3xl font-bold mb-2 tracking-tight">Welcome back</h2>
+            <h2 className="text-3xl font-bold mb-2 tracking-tight">Welcome to Mindful Mirror</h2>
             <p className="text-[var(--muted-foreground)] mb-10 text-lg leading-relaxed">
-              {isSigningUp ? 'Create your sanctuary today.' : 'Sign in to continue your reflection.'}
+              Sign in with Google to continue your reflection.
             </p>
             
             {loginError && (
@@ -409,67 +386,8 @@ export default function App() {
             )}
             
             <div className="space-y-6">
-              <div className="p-8 bg-[var(--card)] rounded-3xl shadow-xl border border-[var(--border)]">
-                <form onSubmit={handleEmailAuth} className="space-y-5">
-                  <div className="space-y-2 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Email Address</label>
-                    <div className="relative group">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)] group-focus-within:text-[var(--primary)] transition-colors" />
-                      <input
-                        type="email"
-                        placeholder="name@example.com"
-                        className="w-full bg-[var(--muted)] pl-12 pr-5 py-4 rounded-2xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Password</label>
-                    <div className="relative group">
-                      <Zap className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)] group-focus-within:text-[var(--primary)] transition-colors" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="w-full bg-[var(--muted)] pl-12 pr-12 py-4 rounded-2xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <Button type="submit" className="w-full py-7 text-xs font-bold uppercase tracking-widest rounded-2xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                    {isSigningUp ? 'Create Account' : 'Sign In'}
-                  </Button>
-                </form>
-
-                <div className="mt-8 flex flex-col items-center gap-4">
-                  <button 
-                    onClick={() => setIsSigningUp(!isSigningUp)}
-                    className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary)] hover:opacity-80 transition-opacity"
-                  >
-                    {isSigningUp ? 'Already have an account? Sign In' : 'New here? Create Account'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-[var(--border)]"></span>
-                </div>
-                <div className="relative flex justify-center text-[10px] uppercase">
-                  <span className="bg-[var(--background)] px-4 text-[var(--muted-foreground)] tracking-widest font-bold">Or</span>
-                </div>
-              </div>
-
-              <Button variant="outline" onClick={handleLogin} className="w-full gap-3 py-7 text-xs font-bold uppercase tracking-widest rounded-2xl border-[var(--border)] hover:bg-[var(--muted)] transition-colors">
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <Button onClick={handleLogin} className="w-full gap-3 py-8 text-sm font-bold uppercase tracking-widest rounded-2xl shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all">
+                <svg className="w-6 h-6" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                   <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                   <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
@@ -495,7 +413,10 @@ export default function App() {
           {showAbout && <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />}
         </AnimatePresence>
 
-        {/* Logout Confirmation Modal */}
+        {/* AI Chat Box */}
+      {user && <AIChat userId={user.uid} memories={memories} />}
+
+      {/* Logout Confirmation Modal */}
         <AnimatePresence>
           {showLogoutConfirm && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -873,42 +794,54 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
             <Smile className="w-4 h-4" />
             Mood Trends
           </h3>
-          <div className="h-48 md:h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={moodData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis 
-                  dataKey="date" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} 
-                />
-                <YAxis 
-                  domain={[1, 5]} 
-                  axisLine={false} 
-                  tickLine={false} 
-                  ticks={[1, 2, 3, 4, 5]}
-                  tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'var(--card)', 
-                    borderColor: 'var(--border)', 
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-                  }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="mood" 
-                  stroke="var(--primary)" 
-                  strokeWidth={2} 
-                  dot={{ r: 2, fill: 'var(--primary)', strokeWidth: 0 }}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="h-48 md:h-64 w-full relative">
+            {moodData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={moodData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} 
+                  />
+                  <YAxis 
+                    domain={[1, 5]} 
+                    axisLine={false} 
+                    tickLine={false} 
+                    ticks={[1, 2, 3, 4, 5]}
+                    tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+                  />
+                  <Tooltip 
+                    content={({ active, label }) => {
+                      if (active && label) {
+                        return (
+                          <div className="bg-[var(--card)] border border-[var(--border)] p-2 rounded-lg shadow-md text-[10px] font-bold uppercase tracking-widest text-[var(--foreground)]">
+                            {label}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="mood" 
+                    stroke="var(--primary)" 
+                    strokeWidth={2} 
+                    dot={{ r: 2, fill: 'var(--primary)', strokeWidth: 0 }}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+                <Smile className="w-8 h-8 text-[var(--muted)] mb-3 opacity-30" />
+                <p className="text-xs text-[var(--muted-foreground)] max-w-[180px]">
+                  No mood data to display. Log your mood to see trends.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -1275,6 +1208,235 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function AIChat({ userId, memories }: { userId: string, memories: Memory[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const userMessageCount = messages.filter(m => m.role === 'user').length;
+  const isLimitReached = userMessageCount >= 15;
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setSpeechError(null);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => prev + (prev ? ' ' : '') + transcript);
+    };
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      if (event.error === 'not-allowed') {
+        setSpeechError("Microphone access denied. Please allow it in browser settings.");
+      } else {
+        setSpeechError("Speech recognition failed. Please try again.");
+      }
+      setIsListening(false);
+      setTimeout(() => setSpeechError(null), 5000);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const resetChat = () => {
+    setMessages([{ role: 'model', text: "Starting a new conversation for better results! How can I help you now?" }]);
+    setInput('');
+    setIsTyping(false);
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isTyping || isLimitReached) return;
+    
+    const userMessage = input.trim();
+    setInput(''); // Clear input immediately
+    
+    // Stop listening if active
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    }
+
+    setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setIsTyping(true);
+
+    const history = messages.map(m => ({
+      role: m.role,
+      parts: [{ text: m.text }]
+    }));
+    
+    // Include the current message in history for context
+    history.push({ role: 'user', parts: [{ text: userMessage }] });
+
+    const memoryStrings = memories.map(m => m.content);
+    const response = await getAIChatResponse(userMessage, history, memoryStrings);
+    
+    // Check for memory tag
+    const memoryMatch = response.match(/\[\[REMEMBER: (.*?)\]\]/);
+    let cleanResponse = response.replace(/\[\[REMEMBER: .*?\]\]/g, '').trim();
+    
+    if (memoryMatch && memoryMatch[1]) {
+      const memoryContent = memoryMatch[1];
+      try {
+        await addDoc(collection(db, 'memories'), {
+          content: memoryContent,
+          createdAt: serverTimestamp(),
+          userId
+        });
+      } catch (err) {
+        console.error("Failed to save memory:", err);
+      }
+    }
+
+    setMessages(prev => [...prev, { role: 'model', text: cleanResponse }]);
+    setIsTyping(false);
+  };
+
+  return (
+    <div className="fixed bottom-6 right-6 z-[100]">
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="absolute bottom-20 right-0 w-[320px] md:w-[400px] h-[450px] md:h-[500px] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          >
+            <div className="p-4 border-b border-[var(--border)] bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5" />
+                <div className="flex flex-col">
+                  <span className="font-bold tracking-tight leading-none">Lumina</span>
+                  <span className={cn(
+                    "text-[9px] font-medium uppercase tracking-wider mt-0.5",
+                    isLimitReached ? "text-red-400" : "opacity-70"
+                  )}>
+                    {userMessageCount}/15
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={resetChat} 
+                  title="Reset Conversation"
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+                <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+              {speechError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2 rounded-lg text-center animate-in fade-in slide-in-from-top-1">
+                  {speechError}
+                </div>
+              )}
+              {messages.length === 0 && (
+                <div className="text-center py-10">
+                  <Sparkles className="w-10 h-10 text-[var(--muted)] mx-auto mb-3 opacity-30" />
+                  <p className="text-sm text-[var(--muted-foreground)]">Hi! I'm Lumina. How are you feeling today?</p>
+                </div>
+              )}
+              {messages.map((m, i) => (
+                <div key={i} className={cn("flex", m.role === 'user' ? "justify-end" : "justify-start")}>
+                  <div className={cn(
+                    "max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed",
+                    m.role === 'user' 
+                      ? "bg-[var(--primary)] text-[var(--primary-foreground)] rounded-tr-none" 
+                      : "bg-[var(--muted)] text-[var(--foreground)] rounded-tl-none"
+                  )}>
+                    {m.text}
+                  </div>
+                </div>
+              ))}
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="bg-[var(--muted)] p-3 rounded-2xl rounded-tl-none flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-[var(--muted-foreground)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-1.5 h-1.5 bg-[var(--muted-foreground)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-1.5 h-1.5 bg-[var(--muted-foreground)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-[var(--border)] flex gap-2">
+              <button
+                onClick={toggleListening}
+                disabled={isTyping || isLimitReached}
+                className={cn(
+                  "p-2 rounded-xl border border-[var(--border)] transition-all",
+                  isListening 
+                    ? "bg-red-500 text-white border-red-500 animate-pulse" 
+                    : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--border)]"
+                )}
+                title={isListening ? "Stop listening" : "Start voice-to-text"}
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+              <input
+                type="text"
+                disabled={isTyping || isLimitReached}
+                placeholder={
+                  isLimitReached 
+                    ? "Limit reached. Please reset chat." 
+                    : isTyping 
+                      ? "Lumina is thinking..." 
+                      : "Talk to Lumina..."
+                }
+                className="flex-1 bg-[var(--muted)] border border-[var(--border)] rounded-xl px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all disabled:opacity-50"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSend()}
+              />
+              <Button size="sm" onClick={handleSend} disabled={!input.trim() || isTyping || isLimitReached} className="rounded-xl px-3">
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-14 h-14 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-all active:scale-95 group"
+      >
+        <Sparkles className={cn("w-6 h-6 transition-all", isOpen ? "rotate-45" : "group-hover:rotate-12")} />
+      </button>
     </div>
   );
 }

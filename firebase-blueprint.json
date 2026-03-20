@@ -65,6 +65,17 @@
         "userId": { "type": "string", "description": "The ID of the user." }
       },
       "required": ["quote", "savedAt", "userId"]
+    },
+    "Memory": {
+      "title": "Memory",
+      "description": "A piece of information the AI should remember about the user.",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string", "description": "The information to remember." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the memory was created." },
+        "userId": { "type": "string", "description": "The ID of the user." }
+      },
+      "required": ["content", "createdAt", "userId"]
     }
   },
   "firestore": {
@@ -87,6 +98,10 @@
     "/savedInspirations/{inspId}": {
       "schema": "SavedInspiration",
       "description": "Collection of saved inspirational quotes."
+    },
+    "/memories/{memoryId}": {
+      "schema": "Memory",
+      "description": "Collection of AI memories about the user."
     }
   }
 }

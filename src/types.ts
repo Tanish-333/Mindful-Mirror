@@ -43,3 +43,10 @@ export interface SavedInspiration {
   savedAt: any;
   userId: string;
 }
+
+export interface Memory {
+  id?: string;
+  content: string;
+  createdAt: any;
+  userId: string;
+}

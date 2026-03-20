@@ -1,5 +1,5 @@
 {
   "name": "Mindful Mirror",
   "description": "Mindful Mirror is a minimalist sanctuary for daily reflection, mood tracking, and personal growth with AI-powered insights.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["microphone"]
 }

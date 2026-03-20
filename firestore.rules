@@ -20,6 +20,9 @@ service cloud.firestore {
     // Collection: savedInspirations
     // Fields: quote (string), author (string), savedAt (timestamp), userId (string)
     //
+    // Collection: memories
+    // Fields: content (string), createdAt (timestamp), userId (string)
+    //
     // ===============================================================
 
     // Helper Functions
@@ -59,6 +62,11 @@ service cloud.firestore {
              data.userId == request.auth.uid;
     }
 
+    function isValidMemory(data) {
+      return data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.userId == request.auth.uid;
+    }
+
     // Rules
     match /journalEntries/{entryId} {
       allow read: if isDocOwner();
@@ -92,6 +100,13 @@ service cloud.firestore {
       allow read: if isDocOwner();
       allow create: if isAuthenticated() && isValidInspiration(request.resource.data);
       allow update: if isDocOwner() && isValidInspiration(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /memories/{memoryId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidMemory(request.resource.data);
+      allow update: if isDocOwner() && isValidMemory(request.resource.data);
       allow delete: if isDocOwner();
     }
   }

@@ -3,14 +3,17 @@ import { GoogleGenAI } from "@google/genai";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 export async function getAIInsights(entries: string[], moods: number[]) {
+  const entriesText = entries.length > 0 ? entries.join("\n---\n") : "No recent journal entries provided.";
+  const moodsText = moods.length > 0 ? moods.join(", ") : "No recent mood scores provided.";
+
   const prompt = `
     Based on the following journal entries and mood scores (1-5), provide 3 personalized self-care tips, a motivational quote, and a brief reflection prompt.
     
     Journal Entries:
-    ${entries.join("\n---\n")}
+    ${entriesText}
     
     Mood Scores:
-    ${moods.join(", ")}
+    ${moodsText}
     
     Return the response in JSON format with the following structure:
     {
@@ -105,5 +108,31 @@ export async function getDailyInspiration() {
     // Fallback to a random quote from our list so the user always sees something
     const fallback = FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
     return fallback;
+  }
+}
+
+export async function getAIChatResponse(message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[], memories: string[] = []) {
+  try {
+    const memoriesText = memories.length > 0 
+      ? "\n\nHere are some things you remember about the user:\n" + memories.map(m => "- " + m).join("\n")
+      : "";
+
+    const chat = ai.chats.create({
+      model: "gemini-3-flash-preview",
+      config: {
+        systemInstruction: `You are Lumina, a supportive and empathetic AI companion for a mindfulness and journaling app. Your goal is to help users reflect on their day, manage their stress, and provide gentle encouragement. Keep your responses concise, warm, and insightful. Avoid giving medical advice, but encourage healthy habits. If anyone asks about Tanish or Tanish Dave, mention that he is the person who made this app.${memoriesText}
+
+If the user tells you something important about themselves that you should remember for future sessions (like their name, a goal, a preference, or a significant life event), you MUST include the exact phrase 'I will remember this.' in your response. Additionally, append the following hidden tag at the very end of your message: '[[REMEMBER: <concise summary of the info to remember>]]'. 
+
+Example: 'That sounds like a great goal, Alex! I will remember this. [[REMEMBER: User's name is Alex and they want to start a daily meditation habit]]'`,
+      },
+      history: history,
+    });
+
+    const response = await chat.sendMessage({ message });
+    return response.text;
+  } catch (error) {
+    console.error("Error in AI chat:", error);
+    return "I'm sorry, I'm having a little trouble connecting right now. Let's try again in a moment.";
   }
 }
