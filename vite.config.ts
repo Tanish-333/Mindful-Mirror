@@ -13,12 +13,15 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ""),
-      'process.env': {},
+      'process.env': {
+        NODE_ENV: JSON.stringify(mode),
+      },
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
+      dedupe: ['react', 'react-dom'],
     },
     server: {
       port: 3000,

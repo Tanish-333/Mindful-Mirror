@@ -50,7 +50,12 @@ import {
   Quote,
   AlertCircle,
   Mail,
-  Apple
+  Apple,
+  Eye,
+  EyeOff,
+  Heart,
+  Brain,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -158,6 +163,7 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [moods, setMoods] = useState<MoodLog[]>([]);
@@ -344,93 +350,161 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--background)] p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center max-w-md w-full"
-        >
-          <div className="w-16 h-16 bg-[var(--primary)] rounded-xl flex items-center justify-center mx-auto mb-8 shadow-sm">
-            <Sparkles className="w-8 h-8 text-[var(--primary-foreground)]" />
+      <div className="flex flex-col lg:flex-row min-h-screen bg-[var(--background)]">
+        {/* Left Side: Branding & Info */}
+        <div className="hidden lg:flex flex-col justify-center items-start p-16 xl:p-24 bg-[var(--primary)] text-[var(--primary-foreground)] w-1/2 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+            <Sparkles className="w-[500px] h-[500px] -translate-x-20 -translate-y-20" />
           </div>
-          <h1 className="text-3xl font-bold mb-4 tracking-tight">Mindful Mirror</h1>
-          <p className="text-[var(--muted-foreground)] mb-10 text-lg leading-relaxed">
-            A minimalist sanctuary for daily reflection and personal growth.
-          </p>
           
-          {loginError && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/30 flex items-center gap-3"
-            >
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              <p className="text-left">{loginError}</p>
-            </motion.div>
-          )}
-          
-          <div className="space-y-6">
-            <div className="p-6 bg-[var(--card)] rounded-2xl shadow-sm border border-[var(--border)]">
-              <form onSubmit={handleEmailAuth} className="space-y-4">
-                <div className="space-y-2 text-left">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Email Address</label>
-                  <input
-                    type="email"
-                    placeholder="name@example.com"
-                    className="w-full bg-[var(--muted)] px-5 py-3 rounded-xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2 text-left">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Password</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full bg-[var(--muted)] px-5 py-3 rounded-xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                  />
-                </div>
-                <Button type="submit" className="w-full py-6 text-xs font-bold uppercase tracking-widest rounded-xl">
-                  {isSigningUp ? 'Create Account' : 'Sign In'}
-                </Button>
-              </form>
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+            className="relative z-10"
+          >
+            <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-10 shadow-xl border border-white/20">
+              <Sparkles className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-6xl font-bold mb-6 tracking-tighter leading-none">Mindful Mirror</h1>
+            <p className="text-xl opacity-80 mb-12 max-w-lg leading-relaxed font-light">
+              Your digital sanctuary for mental clarity. Reflect on your day, track your emotional journey, and find daily inspiration.
+            </p>
 
-              <div className="mt-6 flex flex-col items-center gap-4">
-                <button 
-                  onClick={() => setIsSigningUp(!isSigningUp)}
-                  className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary)] hover:opacity-80 transition-opacity"
-                >
-                  {isSigningUp ? 'Already have an account? Sign In' : 'New here? Create Account'}
-                </button>
+            <div className="grid grid-cols-1 gap-8">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Book className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">Intelligent Journaling</h3>
+                  <p className="opacity-60 text-sm">Express your thoughts with Markdown support and auto-save.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Brain className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">AI-Powered Insights</h3>
+                  <p className="opacity-60 text-sm">Get personalized self-care tips and reflection prompts based on your entries.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Smile className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">Mood Tracking</h3>
+                  <p className="opacity-60 text-sm">Visualize your emotional trends over time with beautiful charts.</p>
+                </div>
               </div>
             </div>
+          </motion.div>
+        </div>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-[var(--border)]"></span>
+        {/* Right Side: Login Form */}
+        <div className="flex flex-col items-center justify-center flex-1 p-6 md:p-12">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center max-w-md w-full"
+          >
+            <div className="lg:hidden w-16 h-16 bg-[var(--primary)] rounded-xl flex items-center justify-center mx-auto mb-8 shadow-sm">
+              <Sparkles className="w-8 h-8 text-[var(--primary-foreground)]" />
+            </div>
+            <h2 className="text-3xl font-bold mb-2 tracking-tight lg:text-left">Welcome back</h2>
+            <p className="text-[var(--muted-foreground)] mb-10 text-lg leading-relaxed lg:text-left">
+              {isSigningUp ? 'Create your sanctuary today.' : 'Sign in to continue your reflection.'}
+            </p>
+            
+            {loginError && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/30 flex items-center gap-3"
+              >
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <p className="text-left">{loginError}</p>
+              </motion.div>
+            )}
+            
+            <div className="space-y-6">
+              <div className="p-8 bg-[var(--card)] rounded-3xl shadow-xl border border-[var(--border)]">
+                <form onSubmit={handleEmailAuth} className="space-y-5">
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Email Address</label>
+                    <div className="relative group">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)] group-focus-within:text-[var(--primary)] transition-colors" />
+                      <input
+                        type="email"
+                        placeholder="name@example.com"
+                        className="w-full bg-[var(--muted)] pl-12 pr-5 py-4 rounded-2xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] ml-1">Password</label>
+                    <div className="relative group">
+                      <Zap className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)] group-focus-within:text-[var(--primary)] transition-colors" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="w-full bg-[var(--muted)] pl-12 pr-12 py-4 rounded-2xl outline-none border border-transparent focus:border-[var(--primary)] transition-all text-sm"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full py-7 text-xs font-bold uppercase tracking-widest rounded-2xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-transform">
+                    {isSigningUp ? 'Create Account' : 'Sign In'}
+                  </Button>
+                </form>
+
+                <div className="mt-8 flex flex-col items-center gap-4">
+                  <button 
+                    onClick={() => setIsSigningUp(!isSigningUp)}
+                    className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary)] hover:opacity-80 transition-opacity"
+                  >
+                    {isSigningUp ? 'Already have an account? Sign In' : 'New here? Create Account'}
+                  </button>
+                </div>
               </div>
-              <div className="relative flex justify-center text-[10px] uppercase">
-                <span className="bg-[var(--background)] px-4 text-[var(--muted-foreground)] tracking-widest font-bold">Or</span>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-[var(--border)]"></span>
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase">
+                  <span className="bg-[var(--background)] px-4 text-[var(--muted-foreground)] tracking-widest font-bold">Or</span>
+                </div>
               </div>
+
+              <Button variant="outline" onClick={handleLogin} className="w-full gap-3 py-7 text-xs font-bold uppercase tracking-widest rounded-2xl border-[var(--border)] hover:bg-[var(--muted)] transition-colors">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                Continue with Google
+              </Button>
             </div>
 
-            <Button variant="outline" onClick={handleLogin} className="w-full gap-3 py-6 text-xs font-bold uppercase tracking-widest rounded-xl border-[var(--border)]">
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
-                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              Continue with Google
-            </Button>
-          </div>
-
-          <p className="mt-8 text-xs text-[var(--muted-foreground)] uppercase tracking-widest">
-            Secure • Private • Minimal
-          </p>
-        </motion.div>
+            <p className="mt-12 text-xs text-[var(--muted-foreground)] uppercase tracking-widest font-medium">
+              Secure • Private • Minimal
+            </p>
+          </motion.div>
+        </div>
       </div>
     );
   }
