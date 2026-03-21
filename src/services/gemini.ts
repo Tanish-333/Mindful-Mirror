@@ -20,15 +20,21 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Pr
   }
 }
 
-export async function getAIInsights(entries: string[], moods: number[]) {
+export async function getAIInsights(entries: string[], moods: number[], isToday: boolean = false) {
   if (entries.length === 0 && moods.length === 0) return null;
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-  const entriesText = entries.length > 0 ? entries.join("\n---\n") : "No recent journal entries provided.";
-  const moodsText = moods.length > 0 ? moods.join(", ") : "No recent mood scores provided.";
+  const entriesText = entries.length > 0 ? entries.join("\n---\n") : "No journal entries provided.";
+  const moodsText = moods.length > 0 ? moods.join(", ") : "No mood scores provided.";
+
+  const contextNote = isToday 
+    ? "These are the user's entries and moods from TODAY." 
+    : "These are the user's most recent journal entries and moods.";
 
   const prompt = `
     Based on the following journal entries and mood scores (1-5), provide 3 personalized self-care tips, a motivational quote, and a brief reflection prompt.
+    
+    ${contextNote}
     
     Journal Entries:
     ${entriesText}

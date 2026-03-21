@@ -305,7 +305,29 @@ export default function App() {
   // --- AI Insights Fetch ---
   const fetchInsights = async () => {
     if (!user) return;
-    if (entries.length === 0) {
+    
+    // Define "today" as start of day
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Filter for today's data
+    const todayEntries = entries.filter(e => {
+      const date = e.createdAt?.toDate ? e.createdAt.toDate() : new Date(e.createdAt);
+      return date >= today;
+    });
+    
+    const todayMoods = moods.filter(m => {
+      const date = m.createdAt?.toDate ? m.createdAt.toDate() : new Date(m.createdAt);
+      return date >= today;
+    });
+
+    const isToday = todayEntries.length > 0 || todayMoods.length > 0;
+    
+    // Use today's data if available, otherwise fallback to most recent 5
+    const entriesToUse = isToday ? todayEntries : entries.slice(0, 5);
+    const moodsToUse = isToday ? todayMoods : moods.slice(0, 5);
+
+    if (entriesToUse.length === 0 && moodsToUse.length === 0) {
       setAiInsights({
         tips: ["Start your first journal entry to get personalized tips.", "Log your mood to see trends.", "Try the AI chat for immediate support."],
         quote: "The journey of a thousand miles begins with a single step.",
@@ -317,9 +339,9 @@ export default function App() {
     
     setLoadingInsights(true);
     try {
-      const recentEntries = entries.slice(0, 5).map(e => e.content);
-      const recentMoods = moods.slice(0, 5).map(m => m.mood);
-      const insights = await getAIInsights(recentEntries, recentMoods);
+      const entriesContent = entriesToUse.map(e => e.content);
+      const moodsValue = moodsToUse.map(m => m.mood);
+      const insights = await getAIInsights(entriesContent, moodsValue, isToday);
       if (insights) {
         setAiInsights(insights);
       }
