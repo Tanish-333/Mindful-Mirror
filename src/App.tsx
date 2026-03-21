@@ -17,6 +17,7 @@ import {
   orderBy, 
   limit,
   getDoc,
+  getDocs,
   setDoc,
   getDocFromServer,
   writeBatch
@@ -26,7 +27,10 @@ import {
   GoogleAuthProvider, 
   onAuthStateChanged, 
   signOut, 
-  User
+  User,
+  deleteUser,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { 
   Book, 
@@ -53,8 +57,7 @@ import {
   Brain,
   Menu,
   X,
-  RotateCcw,
-  Mic
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -175,6 +178,9 @@ export default function App() {
 
   // --- Auth & Initial Setup ---
   useEffect(() => {
+    // Set persistence to local for better reliability
+    setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence error:", err));
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAuthReady(true);
@@ -202,7 +208,13 @@ export default function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [preferences?.theme]);
+    
+    if (preferences?.colorTheme) {
+      document.documentElement.setAttribute('data-theme', preferences.colorTheme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }, [preferences?.theme, preferences?.colorTheme]);
 
   // --- Data Listeners ---
   useEffect(() => {
@@ -292,19 +304,41 @@ export default function App() {
 
   // --- AI Insights Fetch ---
   const fetchInsights = async () => {
-    if (!user || (entries.length === 0 && moods.length === 0)) return;
+    if (!user) return;
+    if (entries.length === 0) {
+      setAiInsights({
+        tips: ["Start your first journal entry to get personalized tips.", "Log your mood to see trends.", "Try the AI chat for immediate support."],
+        quote: "The journey of a thousand miles begins with a single step.",
+        author: "Lao Tzu",
+        prompt: "What is one thing you're looking forward to today?"
+      });
+      return;
+    }
+    
     setLoadingInsights(true);
-    const recentEntries = entries.slice(0, 5).map(e => e.content);
-    const recentMoods = moods.slice(0, 5).map(m => m.mood);
-    const insights = await getAIInsights(recentEntries, recentMoods);
-    setAiInsights(insights);
-    setLoadingInsights(false);
+    try {
+      const recentEntries = entries.slice(0, 5).map(e => e.content);
+      const recentMoods = moods.slice(0, 5).map(m => m.mood);
+      const insights = await getAIInsights(recentEntries, recentMoods);
+      if (insights) {
+        setAiInsights(insights);
+      }
+    } catch (err) {
+      console.error("Failed to fetch insights:", err);
+    } finally {
+      setLoadingInsights(false);
+    }
   };
 
   const handleLogin = async () => {
     setLoginError(null);
     console.log("Starting Google login...");
     const provider = new GoogleAuthProvider();
+    // Force account selection to help with school/workspace accounts
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+    
     try {
       const result = await signInWithPopup(auth, provider);
       console.log("Google login successful:", result.user.email);
@@ -316,6 +350,8 @@ export default function App() {
         setLoginError("Login was cancelled. Please try again.");
       } else if (error.code === 'auth/popup-blocked') {
         setLoginError("The login popup was blocked by your browser. Please allow popups for this site.");
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setLoginError("Google Sign-In is not enabled in the Firebase Console. Please contact the administrator.");
       } else {
         setLoginError(`Login failed: ${error.message}`);
       }
@@ -399,6 +435,8 @@ export default function App() {
 
             <p className="mt-12 text-xs text-[var(--muted-foreground)] uppercase tracking-widest font-medium">
               Secure • Private • Minimal
+              <br />
+              <span className="mt-2 block font-bold text-[var(--primary)]">Supports School & Workspace Accounts</span>
             </p>
           </motion.div>
         </div>
@@ -723,9 +761,17 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Overview</h1>
           <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">A summary of your recent wellness and productivity.</p>
         </div>
-        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || (entries.length === 0 && moods.length === 0)} className="gap-2 w-full md:w-auto py-5 md:py-2">
+        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || (entries.length === 0 && moods.length === 0)} className="gap-2 w-full md:w-auto py-5 md:py-2 relative overflow-hidden">
           <Sparkles className={cn("w-4 h-4", loadingInsights && "animate-spin")} />
           {loadingInsights ? "Analyzing..." : "AI Analysis"}
+          {loadingInsights && (
+            <motion.div 
+              className="absolute bottom-0 left-0 h-0.5 bg-[var(--primary)]"
+              initial={{ width: 0 }}
+              animate={{ width: '100%' }}
+              transition={{ duration: 15, ease: "linear" }}
+            />
+          )}
         </Button>
       </header>
 
@@ -1217,54 +1263,10 @@ function AIChat({ userId, memories }: { userId: string, memories: Memory[] }) {
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [speechError, setSpeechError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
 
   const userMessageCount = messages.filter(m => m.role === 'user').length;
   const isLimitReached = userMessageCount >= 15;
-
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      setSpeechError(null);
-    };
-    recognition.onend = () => setIsListening(false);
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(prev => prev + (prev ? ' ' : '') + transcript);
-    };
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      if (event.error === 'not-allowed') {
-        setSpeechError("Microphone access denied. Please allow it in browser settings.");
-      } else {
-        setSpeechError("Speech recognition failed. Please try again.");
-      }
-      setIsListening(false);
-      setTimeout(() => setSpeechError(null), 5000);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -1284,12 +1286,6 @@ function AIChat({ userId, memories }: { userId: string, memories: Memory[] }) {
     const userMessage = input.trim();
     setInput(''); // Clear input immediately
     
-    // Stop listening if active
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-    }
-
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsTyping(true);
 
@@ -1340,12 +1336,18 @@ function AIChat({ userId, memories }: { userId: string, memories: Memory[] }) {
                 <Sparkles className="w-5 h-5" />
                 <div className="flex flex-col">
                   <span className="font-bold tracking-tight leading-none">Lumina</span>
-                  <span className={cn(
-                    "text-[9px] font-medium uppercase tracking-wider mt-0.5",
-                    isLimitReached ? "text-red-400" : "opacity-70"
-                  )}>
-                    {userMessageCount}/15
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      isTyping ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
+                    )} />
+                    <span className={cn(
+                      "text-[9px] font-bold uppercase tracking-widest",
+                      isLimitReached ? "text-red-300" : "opacity-70"
+                    )}>
+                      {isTyping ? "Thinking..." : "Online"} • {userMessageCount}/15
+                    </span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -1362,11 +1364,6 @@ function AIChat({ userId, memories }: { userId: string, memories: Memory[] }) {
               </div>
             </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
-              {speechError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2 rounded-lg text-center animate-in fade-in slide-in-from-top-1">
-                  {speechError}
-                </div>
-              )}
               {messages.length === 0 && (
                 <div className="text-center py-10">
                   <Sparkles className="w-10 h-10 text-[var(--muted)] mx-auto mb-3 opacity-30" />
@@ -1396,19 +1393,6 @@ function AIChat({ userId, memories }: { userId: string, memories: Memory[] }) {
               )}
             </div>
             <div className="p-4 border-t border-[var(--border)] flex gap-2">
-              <button
-                onClick={toggleListening}
-                disabled={isTyping || isLimitReached}
-                className={cn(
-                  "p-2 rounded-xl border border-[var(--border)] transition-all",
-                  isListening 
-                    ? "bg-red-500 text-white border-red-500 animate-pulse" 
-                    : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--border)]"
-                )}
-                title={isListening ? "Stop listening" : "Start voice-to-text"}
-              >
-                <Mic className="w-5 h-5" />
-              </button>
               <input
                 type="text"
                 disabled={isTyping || isLimitReached}
@@ -2036,11 +2020,27 @@ function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedIns
 }
 
 function SettingsView({ preferences, onLogout, user }: { preferences: UserPreference | null; onLogout: () => void; user: User }) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const toggleTheme = async () => {
     if (!preferences) return;
     try {
       await updateDoc(doc(db, 'userPreferences', preferences.id!), {
         theme: preferences.theme === 'light' ? 'dark' : 'light'
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'userPreferences');
+    }
+  };
+
+  const setColorTheme = async (color: string) => {
+    if (!preferences) return;
+    try {
+      await updateDoc(doc(db, 'userPreferences', preferences.id!), {
+        colorTheme: color
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'userPreferences');
@@ -2055,6 +2055,40 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'userPreferences');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteInput.toLowerCase() !== 'delete') return;
+    
+    setIsDeleting(true);
+    setDeleteError(null);
+    
+    try {
+      // 1. Delete all user data from Firestore
+      const collectionsToDelete = ['journalEntries', 'moodLogs', 'tasks', 'userPreferences', 'savedInspirations', 'memories'];
+      
+      for (const collName of collectionsToDelete) {
+        const q = query(collection(db, collName), where('userId', '==', user.uid));
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      // 2. Delete the Auth user
+      // Note: This often requires a recent login.
+      await deleteUser(user);
+      window.location.reload();
+    } catch (err: any) {
+      console.error("Delete account error:", err);
+      if (err.code === 'auth/requires-recent-login') {
+        setDeleteError("This operation requires a recent login. Please sign out and sign back in, then try again.");
+      } else {
+        setDeleteError(`Failed to delete account: ${err.message}`);
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -2106,6 +2140,43 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
             </button>
           </div>
 
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="p-2.5 md:p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
+                <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
+              </div>
+              <div>
+                <p className="font-bold text-base md:text-lg tracking-tight">Color Theme</p>
+                <p className="text-xs md:text-sm text-[var(--muted-foreground)]">Choose your primary accent color</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 pl-14 md:pl-16">
+              {[
+                { name: 'Default', value: 'indigo', bg: 'bg-indigo-500' },
+                { name: 'Emerald', value: 'emerald', bg: 'bg-emerald-500' },
+                { name: 'Rose', value: 'rose', bg: 'bg-rose-500' },
+                { name: 'Amber', value: 'amber', bg: 'bg-amber-500' },
+                { name: 'Slate', value: 'slate', bg: 'bg-slate-500' },
+                { name: 'Violet', value: 'violet', bg: 'bg-violet-500' },
+              ].map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() => setColorTheme(color.value)}
+                  className={cn(
+                    "w-8 h-8 md:w-10 md:h-10 rounded-full transition-all border-2 flex items-center justify-center",
+                    color.bg,
+                    preferences?.colorTheme === color.value 
+                      ? "border-[var(--foreground)] scale-110 shadow-md" 
+                      : "border-transparent hover:scale-105"
+                  )}
+                  title={color.name}
+                >
+                  {preferences?.colorTheme === color.value && <CheckSquare className="w-4 h-4 md:w-5 md:h-5 text-white" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 md:gap-4">
               <div className="p-2.5 md:p-3 bg-[var(--muted)] rounded-xl text-[var(--primary)]">
@@ -2131,13 +2202,79 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
           </div>
         </div>
 
-        <div className="p-6 md:p-8 bg-[var(--muted)]/10">
+        <div className="p-6 md:p-8 bg-[var(--muted)]/10 space-y-4">
           <Button variant="outline" onClick={onLogout} className="w-full py-5 md:py-6 gap-3 text-xs md:text-sm font-bold uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:hover:bg-red-900/20">
             <LogOut className="w-5 h-5" />
             Sign Out of Account
           </Button>
+          
+          <button 
+            onClick={() => setShowDeleteModal(true)}
+            className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 transition-colors"
+          >
+            Delete Account Permanently
+          </button>
         </div>
       </Card>
+
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-md"
+            >
+              <Card className="p-8 border-red-500/50 shadow-2xl">
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-3">
+                  <Trash2 className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2 tracking-tight text-center">Delete Account?</h2>
+                <p className="text-[var(--muted-foreground)] mb-6 text-center text-sm leading-relaxed">
+                  This action is permanent and will delete all your journal entries, mood logs, and settings.
+                </p>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)]">Type "delete" to confirm</p>
+                    <input 
+                      type="text"
+                      value={deleteInput}
+                      onChange={(e) => setDeleteInput(e.target.value)}
+                      placeholder="delete"
+                      className="w-full bg-[var(--muted)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 transition-all"
+                    />
+                  </div>
+                  
+                  {deleteError && (
+                    <p className="text-xs text-red-500 bg-red-50 dark:bg-red-900/10 p-3 rounded-lg border border-red-100 dark:border-red-900/20">{deleteError}</p>
+                  )}
+                  
+                  <div className="flex flex-col gap-3 pt-2">
+                    <Button 
+                      variant="danger" 
+                      onClick={handleDeleteAccount}
+                      disabled={deleteInput.toLowerCase() !== 'delete' || isDeleting}
+                      className="w-full py-6 font-bold uppercase tracking-widest text-xs shadow-lg hover:shadow-xl disabled:opacity-50"
+                    >
+                      {isDeleting ? "Deleting..." : "Delete My Account"}
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => { setShowDeleteModal(false); setDeleteInput(''); setDeleteError(null); }}
+                      disabled={isDeleting}
+                      className="w-full py-6 font-bold uppercase tracking-widest text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="text-center text-[var(--muted-foreground)] text-[10px] md:text-sm">
         <p>Mindful Mirror v1.0.0</p>
