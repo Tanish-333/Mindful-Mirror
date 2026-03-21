@@ -452,7 +452,6 @@ export default function App() {
         </AnimatePresence>
 
         {/* AI Chat Box */}
-      {user && <AIChat userId={user.uid} memories={memories} />}
 
       {/* Logout Confirmation Modal */}
         <AnimatePresence>
@@ -1258,172 +1257,6 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   );
 }
 
-function AIChat({ userId, memories }: { userId: string, memories: Memory[] }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const userMessageCount = messages.filter(m => m.role === 'user').length;
-  const isLimitReached = userMessageCount >= 15;
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const resetChat = () => {
-    setMessages([{ role: 'model', text: "Starting a new conversation for better results! How can I help you now?" }]);
-    setInput('');
-    setIsTyping(false);
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || isTyping || isLimitReached) return;
-    
-    const userMessage = input.trim();
-    setInput(''); // Clear input immediately
-    
-    setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
-    setIsTyping(true);
-
-    const history = messages.map(m => ({
-      role: m.role,
-      parts: [{ text: m.text }]
-    }));
-    
-    // Include the current message in history for context
-    history.push({ role: 'user', parts: [{ text: userMessage }] });
-
-    const memoryStrings = memories.map(m => m.content);
-    const response = await getAIChatResponse(userMessage, history, memoryStrings);
-    
-    // Check for memory tag
-    const memoryMatch = response.match(/\[\[REMEMBER: (.*?)\]\]/);
-    let cleanResponse = response.replace(/\[\[REMEMBER: .*?\]\]/g, '').trim();
-    
-    if (memoryMatch && memoryMatch[1]) {
-      const memoryContent = memoryMatch[1];
-      try {
-        await addDoc(collection(db, 'memories'), {
-          content: memoryContent,
-          createdAt: serverTimestamp(),
-          userId
-        });
-      } catch (err) {
-        console.error("Failed to save memory:", err);
-      }
-    }
-
-    setMessages(prev => [...prev, { role: 'model', text: cleanResponse }]);
-    setIsTyping(false);
-  };
-
-  return (
-    <div className="fixed bottom-6 right-6 z-[100]">
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="absolute bottom-20 right-0 w-[320px] md:w-[400px] h-[450px] md:h-[500px] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          >
-            <div className="p-4 border-b border-[var(--border)] bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                <div className="flex flex-col">
-                  <span className="font-bold tracking-tight leading-none">Lumina</span>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <div className={cn(
-                      "w-1.5 h-1.5 rounded-full",
-                      isTyping ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
-                    )} />
-                    <span className={cn(
-                      "text-[9px] font-bold uppercase tracking-widest",
-                      isLimitReached ? "text-red-300" : "opacity-70"
-                    )}>
-                      {isTyping ? "Thinking..." : "Online"} • {userMessageCount}/15
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <button 
-                  onClick={resetChat} 
-                  title="Reset Conversation"
-                  className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-                <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
-              {messages.length === 0 && (
-                <div className="text-center py-10">
-                  <Sparkles className="w-10 h-10 text-[var(--muted)] mx-auto mb-3 opacity-30" />
-                  <p className="text-sm text-[var(--muted-foreground)]">Hi! I'm Lumina. How are you feeling today?</p>
-                </div>
-              )}
-              {messages.map((m, i) => (
-                <div key={i} className={cn("flex", m.role === 'user' ? "justify-end" : "justify-start")}>
-                  <div className={cn(
-                    "max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed",
-                    m.role === 'user' 
-                      ? "bg-[var(--primary)] text-[var(--primary-foreground)] rounded-tr-none" 
-                      : "bg-[var(--muted)] text-[var(--foreground)] rounded-tl-none"
-                  )}>
-                    {m.text}
-                  </div>
-                </div>
-              ))}
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="bg-[var(--muted)] p-3 rounded-2xl rounded-tl-none flex gap-1">
-                    <span className="w-1.5 h-1.5 bg-[var(--muted-foreground)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-[var(--muted-foreground)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-[var(--muted-foreground)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="p-4 border-t border-[var(--border)] flex gap-2">
-              <input
-                type="text"
-                disabled={isTyping || isLimitReached}
-                placeholder={
-                  isLimitReached 
-                    ? "Limit reached. Please reset chat." 
-                    : isTyping 
-                      ? "Lumina is thinking..." 
-                      : "Talk to Lumina..."
-                }
-                className="flex-1 bg-[var(--muted)] border border-[var(--border)] rounded-xl px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all disabled:opacity-50"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
-              />
-              <Button size="sm" onClick={handleSend} disabled={!input.trim() || isTyping || isLimitReached} className="rounded-xl px-3">
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-all active:scale-95 group"
-      >
-        <Sparkles className={cn("w-6 h-6 transition-all", isOpen ? "rotate-45" : "group-hover:rotate-12")} />
-      </button>
-    </div>
-  );
-}
 
 function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
@@ -2129,7 +1962,7 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
             <button 
               onClick={toggleTheme}
               className={cn(
-                "w-12 h-6 md:w-14 md:h-7 rounded-full transition-all relative p-1",
+                "w-12 h-6 md:w-14 md:h-7 rounded-full transition-all relative p-1 border border-black/10 dark:border-white/10",
                 preferences?.theme === 'dark' ? "bg-[var(--primary)]" : "bg-[var(--border)]"
               )}
             >
@@ -2190,7 +2023,7 @@ function SettingsView({ preferences, onLogout, user }: { preferences: UserPrefer
             <button 
               onClick={toggleNotifications}
               className={cn(
-                "w-12 h-6 md:w-14 md:h-7 rounded-full transition-all relative p-1",
+                "w-12 h-6 md:w-14 md:h-7 rounded-full transition-all relative p-1 border border-black/10 dark:border-white/10",
                 preferences?.notificationsEnabled ? "bg-[var(--primary)]" : "bg-[var(--border)]"
               )}
             >

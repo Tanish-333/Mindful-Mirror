@@ -47,7 +47,7 @@ export async function getAIInsights(entries: string[], moods: number[]) {
 
   try {
     const response = await withRetry(() => withTimeout(ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -81,11 +81,16 @@ const FALLBACK_QUOTES = [
   { quote: "Believe you can and you're halfway there.", author: "Theodore Roosevelt", tip: "Drink a glass of water right now." },
   { quote: "Act as if what you do makes a difference. It does.", author: "William James", tip: "Write down one thing you're grateful for." },
   { quote: "The best way to predict the future is to create it.", author: "Peter Drucker", tip: "Plan your top 3 tasks for tomorrow tonight." },
-  { quote: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius", tip: "Focus on one task at a time for 25 minutes." }
+  { quote: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius", tip: "Focus on one task at a time for 25 minutes." },
+  { quote: "Your time is limited, so don't waste it living someone else's life.", author: "Steve Jobs", tip: "Try a 2-minute breathing exercise." },
+  { quote: "The only limit to our realization of tomorrow will be our doubts of today.", author: "Franklin D. Roosevelt", tip: "Reach out to a friend you haven't spoken to in a while." },
+  { quote: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill", tip: "Organize your workspace for 10 minutes." },
+  { quote: "Hardships often prepare ordinary people for an extraordinary destiny.", author: "C.S. Lewis", tip: "Listen to your favorite song to boost your mood." },
+  { quote: "The secret of getting ahead is getting started.", author: "Mark Twain", tip: "Write down your most important goal for the week." }
 ];
 
 export async function getDailyInspiration() {
-  const CACHE_KEY = 'mindful_mirror_daily_quote_v4';
+  const CACHE_KEY = 'mindful_mirror_daily_quote_v5';
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   
   const now = new Date();
@@ -104,15 +109,15 @@ export async function getDailyInspiration() {
       }
     }
 
-    const prompt = "Provide a daily inspirational quote and a short life tip. Return ONLY a JSON object: { \"quote\": \"string\", \"author\": \"string\", \"tip\": \"string\" }";
+    const prompt = `Provide a unique daily inspirational quote and a short life tip for ${today}. The quote should be different from common ones. Return ONLY a JSON object: { "quote": "string", "author": "string", "tip": "string" }`;
     
     const response = await withRetry(() => withTimeout(ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
       },
-    }), 10000));
+    }), 15000));
 
     const text = response.text;
     if (!text) throw new Error("Empty response from AI");
@@ -142,7 +147,7 @@ export async function getAIChatResponse(message: string, history: { role: 'user'
       : "";
 
     const chat = ai.chats.create({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       config: {
         systemInstruction: `You are Lumina, a supportive and empathetic AI companion for a mindfulness and journaling app. Your goal is to help users reflect on their day, manage their stress, and provide gentle encouragement. Keep your responses concise, warm, and insightful. Avoid giving medical advice, but encourage healthy habits. If anyone asks about Tanish or Tanish Dave, mention that he is the person who made this app.${memoriesText}
 
