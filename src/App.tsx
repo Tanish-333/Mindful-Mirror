@@ -57,10 +57,30 @@ import {
   Brain,
   Menu,
   X,
-  RotateCcw
+  RotateCcw,
+  RefreshCw,
+  Filter,
+  Edit2,
+  MoreVertical,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { 
+  format, 
+  subDays, 
+  startOfDay, 
+  endOfDay, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  eachDayOfInterval, 
+  isSameMonth, 
+  isSameDay, 
+  addMonths, 
+  subMonths 
+} from 'date-fns';
 import { 
   LineChart, 
   Line, 
@@ -75,8 +95,8 @@ import {
 import Markdown from 'react-markdown';
 
 import { db, auth } from './firebase';
-import { JournalEntry, MoodLog, Task, UserPreference, SavedInspiration, Memory } from './types';
-import { getAIInsights, getDailyInspiration, getAIChatResponse } from './services/gemini';
+import { JournalEntry, MoodLog, Task, UserPreference, SavedInspiration, Memory, CalendarEvent } from './types';
+import { getAIInsights, getDailyInspiration, getAIChatResponse, getJournalDraft } from './services/gemini';
 import { Card, Button, cn } from './components/ui';
 
 // --- Error Handling ---
@@ -162,7 +182,9 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'journal' | 'mood' | 'tasks' | 'inspiration' | 'settings' | 'calendar'>('dashboard');
+  const [localCalendarEvents, setLocalCalendarEvents] = useState<CalendarEvent[]>([]);
+
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [moods, setMoods] = useState<MoodLog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -226,6 +248,7 @@ export default function App() {
     const qPrefs = query(collection(db, 'userPreferences'), where('userId', '==', user.uid), limit(1));
     const qSaved = query(collection(db, 'savedInspirations'), where('userId', '==', user.uid), orderBy('savedAt', 'desc'));
     const qMemories = query(collection(db, 'memories'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const qEvents = query(collection(db, 'calendarEvents'), where('userId', '==', user.uid), orderBy('startTime', 'asc'));
 
     const unsubEntries = onSnapshot(qEntries, (snap) => {
       setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() } as JournalEntry)));
@@ -262,6 +285,10 @@ export default function App() {
       setMemories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Memory)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'memories'));
 
+    const unsubEvents = onSnapshot(qEvents, (snap) => {
+      setLocalCalendarEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as CalendarEvent)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'calendarEvents'));
+
     return () => {
       unsubEntries();
       unsubMoods();
@@ -269,15 +296,22 @@ export default function App() {
       unsubPrefs();
       unsubSaved();
       unsubMemories();
+      unsubEvents();
     };
   }, [user, isAuthReady]);
 
-  // Clear AI insights when data changes to ensure they stay relevant
+  // Clear AI insights when data changes or day changes to ensure they stay relevant
   useEffect(() => {
     if (aiInsights) {
       setAiInsights(null);
     }
-  }, [entries.length, moods.length]);
+  }, [
+    entries.length, 
+    moods.length, 
+    entries[0]?.updatedAt?.seconds, 
+    moods[0]?.createdAt?.seconds,
+    new Date().toDateString() // Refresh daily
+  ]);
 
   // Auto-fetch insights when data is available and we don't have them yet
   useEffect(() => {
@@ -529,6 +563,7 @@ export default function App() {
               <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard />} label="Dashboard" />
               <NavButton active={activeTab === 'journal'} onClick={() => setActiveTab('journal')} icon={<Book />} label="Journal" />
               <NavButton active={activeTab === 'mood'} onClick={() => setActiveTab('mood')} icon={<Smile />} label="Mood" />
+              <NavButton active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} icon={<Calendar />} label="Calendar" />
               <NavButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare />} label="Tasks" />
               <NavButton active={activeTab === 'inspiration'} onClick={() => setActiveTab('inspiration')} icon={<Quote />} label="Inspiration" />
               <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings />} label="Settings" />
@@ -579,6 +614,12 @@ export default function App() {
                     onClick={() => { setActiveTab('mood'); setIsMobileMenuOpen(false); }} 
                     icon={<Smile />} 
                     label="Mood" 
+                  />
+                  <MobileNavButton 
+                    active={activeTab === 'calendar'} 
+                    onClick={() => { setActiveTab('calendar'); setIsMobileMenuOpen(false); }} 
+                    icon={<Calendar />} 
+                    label="Calendar" 
                   />
                   <MobileNavButton 
                     active={activeTab === 'tasks'} 
@@ -637,6 +678,13 @@ export default function App() {
               )}
               {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} />}
               {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} />}
+              {activeTab === 'calendar' && (
+                <CalendarView 
+                  tasks={tasks} 
+                  localEvents={localCalendarEvents}
+                  userId={user.uid}
+                />
+              )}
               {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} />}
               {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} />}
               {activeTab === 'settings' && <SettingsView preferences={preferences} onLogout={handleLogout} user={user} />}
@@ -681,6 +729,834 @@ function MobileNavButton({ active, onClick, icon, label }: { active: boolean; on
       {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-6 h-6" })}
       <span className="uppercase tracking-widest text-xs font-bold">{label}</span>
     </button>
+  );
+}
+
+function CalendarView({ 
+  tasks, 
+  localEvents,
+  userId
+}: { 
+  tasks: Task[]; 
+  localEvents: CalendarEvent[];
+  userId: string;
+}) {
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('month');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [filter, setFilter] = useState({ category: 'all', priority: 'all' });
+  
+  // Modals
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  // --- Calendar Navigation ---
+  const next = () => {
+    if (viewMode === 'month') setCurrentDate(addMonths(currentDate, 1));
+    else if (viewMode === 'week') setCurrentDate(subDays(currentDate, -7));
+    else setCurrentDate(subDays(currentDate, -1));
+  };
+
+  const prev = () => {
+    if (viewMode === 'month') setCurrentDate(subMonths(currentDate, 1));
+    else if (viewMode === 'week') setCurrentDate(subDays(currentDate, 7));
+    else setCurrentDate(subDays(currentDate, 1));
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+    setSelectedDate(new Date());
+  };
+
+  // --- Data Filtering & Retrieval ---
+  const getDayItems = (day: Date) => {
+    const dayStart = startOfDay(day);
+    const dayEnd = endOfDay(day);
+
+    const filteredTasks = tasks.filter(t => {
+      if (!t.deadline) return false;
+      const d = t.deadline.toDate ? t.deadline.toDate() : new Date(t.deadline);
+      const matchesDate = isSameDay(d, day);
+      const matchesPriority = filter.priority === 'all' || t.priority === filter.priority;
+      const matchesCategory = filter.category === 'all' || t.category === filter.category;
+      return matchesDate && matchesPriority && matchesCategory;
+    });
+
+    const filteredEvents = localEvents.filter(e => {
+      const start = e.startTime.toDate ? e.startTime.toDate() : new Date(e.startTime);
+      const matchesCategory = filter.category === 'all' || e.category === filter.category;
+      
+      if (!matchesCategory) return false;
+
+      // Base date match
+      if (isSameDay(start, day)) return true;
+
+      // Recurrence logic
+      if (!e.repeat || e.repeat === 'none') return false;
+
+      // Only show if the event started ON or BEFORE the current day
+      if (start > day) return false;
+
+      if (e.repeat === 'daily') return true;
+      if (e.repeat === 'weekly') {
+        if (e.repeatDays && e.repeatDays.length > 0) {
+          return e.repeatDays.includes(day.getDay());
+        }
+        return start.getDay() === day.getDay();
+      }
+      if (e.repeat === 'monthly') return start.getDate() === day.getDate();
+      if (e.repeat === 'yearly') return start.getDate() === day.getDate() && start.getMonth() === day.getMonth();
+
+      return false;
+    });
+
+    return { filteredTasks, filteredEvents };
+  };
+
+  // --- CRUD Operations ---
+  const handleSaveEvent = async (eventData: Partial<CalendarEvent>) => {
+    try {
+      if (editingEvent?.id) {
+        await updateDoc(doc(db, 'calendarEvents', editingEvent.id), {
+          ...eventData,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'calendarEvents'), {
+          ...eventData,
+          userId,
+          createdAt: serverTimestamp()
+        });
+      }
+      setIsEventModalOpen(false);
+      setEditingEvent(null);
+    } catch (err) {
+      handleFirestoreError(err, editingEvent ? OperationType.UPDATE : OperationType.CREATE, 'calendarEvents');
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    setConfirmConfig({
+      title: 'Delete Event',
+      message: 'Are you sure you want to delete this event? This action cannot be undone.',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'calendarEvents', id));
+          setIsEventModalOpen(false);
+          setEditingEvent(null);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, 'calendarEvents');
+        }
+      }
+    });
+  };
+
+  const [confirmConfig, setConfirmConfig] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
+  const handleSaveTask = async (taskData: Partial<Task>) => {
+    try {
+      if (editingTask?.id) {
+        await updateDoc(doc(db, 'tasks', editingTask.id), {
+          ...taskData,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'tasks'), {
+          ...taskData,
+          userId,
+          completed: false,
+          createdAt: serverTimestamp()
+        });
+      }
+      setIsTaskModalOpen(false);
+      setEditingTask(null);
+    } catch (err) {
+      handleFirestoreError(err, editingTask ? OperationType.UPDATE : OperationType.CREATE, 'tasks');
+    }
+  };
+
+  const toggleTaskComplete = async (task: Task) => {
+    try {
+      await updateDoc(doc(db, 'tasks', task.id!), { completed: !task.completed });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'tasks');
+    }
+  };
+
+  // --- Drag & Drop ---
+  const onDragStart = (e: React.DragEvent, item: any, type: 'event' | 'task') => {
+    e.dataTransfer.setData('itemId', item.id);
+    e.dataTransfer.setData('itemType', type);
+  };
+
+  const onDrop = async (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    const itemId = e.dataTransfer.getData('itemId');
+    const itemType = e.dataTransfer.getData('itemType');
+
+    try {
+      if (itemType === 'event') {
+        const event = localEvents.find(ev => ev.id === itemId);
+        if (event) {
+          const start = event.startTime.toDate ? event.startTime.toDate() : new Date(event.startTime);
+          const end = event.endTime.toDate ? event.endTime.toDate() : new Date(event.endTime);
+          const diff = end.getTime() - start.getTime();
+          
+          const newStart = new Date(targetDate);
+          newStart.setHours(start.getHours(), start.getMinutes());
+          const newEnd = new Date(newStart.getTime() + diff);
+
+          await updateDoc(doc(db, 'calendarEvents', itemId), {
+            startTime: newStart,
+            endTime: newEnd
+          });
+        }
+      } else if (itemType === 'task') {
+        const task = tasks.find(t => t.id === itemId);
+        if (task) {
+          const deadline = task.deadline.toDate ? task.deadline.toDate() : new Date(task.deadline);
+          const newDeadline = new Date(targetDate);
+          newDeadline.setHours(deadline.getHours(), deadline.getMinutes());
+          
+          await updateDoc(doc(db, 'tasks', itemId), {
+            deadline: newDeadline
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to reschedule:", err);
+    }
+  };
+
+  // --- Render Helpers ---
+  const renderMonthView = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
+    const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+    return (
+      <div className="grid grid-cols-7 gap-px bg-[var(--border)] border border-[var(--border)] rounded-xl overflow-hidden shadow-sm">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+          <div key={day} className="bg-[var(--muted)] p-3 text-center text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)]">
+            {day}
+          </div>
+        ))}
+        {calendarDays.map((day, i) => {
+          const { filteredTasks, filteredEvents } = getDayItems(day);
+          const isCurrentMonth = isSameMonth(day, monthStart);
+          const isSelected = isSameDay(day, selectedDate);
+          const isToday = isSameDay(day, new Date());
+
+          return (
+            <div 
+              key={i} 
+              onClick={() => setSelectedDate(day)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => onDrop(e, day)}
+              className={cn(
+                "min-h-[100px] md:min-h-[140px] p-2 bg-[var(--card)] cursor-pointer transition-colors hover:bg-[var(--muted)]/30",
+                !isCurrentMonth && "bg-[var(--muted)]/10 text-[var(--muted-foreground)]/50",
+                isSelected && "ring-2 ring-[var(--primary)] ring-inset z-10"
+              )}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <span className={cn(
+                  "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full",
+                  isToday && "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                )}>
+                  {format(day, 'd')}
+                </span>
+              </div>
+              <div className="space-y-1 overflow-hidden">
+                {filteredEvents.slice(0, 2).map((e) => (
+                  <div 
+                    key={`event-${e.id}`} 
+                    draggable 
+                    onDragStart={(ev) => onDragStart(ev, e, 'event')}
+                    onClick={(ev) => { ev.stopPropagation(); setEditingEvent(e); setIsEventModalOpen(true); }}
+                    className="text-[9px] p-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate font-semibold"
+                  >
+                    {e.title}
+                  </div>
+                ))}
+                {filteredTasks.slice(0, 2).map((t) => (
+                  <div 
+                    key={`task-${t.id}`} 
+                    draggable 
+                    onDragStart={(ev) => onDragStart(ev, t, 'task')}
+                    onClick={(ev) => { ev.stopPropagation(); setEditingTask(t); setIsTaskModalOpen(true); }}
+                    className={cn(
+                      "text-[9px] p-1 rounded truncate font-semibold",
+                      t.completed ? "bg-gray-100 text-gray-400 line-through" : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                    )}
+                  >
+                    {t.title}
+                  </div>
+                ))}
+                {(filteredEvents.length + filteredTasks.length) > 5 && (
+                  <div className="text-[8px] text-[var(--muted-foreground)] font-bold text-center">
+                    +{(filteredEvents.length + filteredTasks.length) - 5} more
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderWeekView = () => {
+    const weekStart = startOfWeek(currentDate);
+    const weekEnd = endOfWeek(weekStart);
+    const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
+    return (
+      <div className="grid grid-cols-7 gap-4">
+        {days.map((day, i) => {
+          const { filteredTasks, filteredEvents } = getDayItems(day);
+          const isToday = isSameDay(day, new Date());
+          
+          return (
+            <div key={i} className="space-y-4">
+              <div className={cn(
+                "text-center p-3 rounded-xl",
+                isToday ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-[var(--card)] border border-[var(--border)]"
+              )}>
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">{format(day, 'EEE')}</p>
+                <p className="text-xl font-bold">{format(day, 'd')}</p>
+              </div>
+              <div 
+                className="min-h-[400px] p-2 bg-[var(--card)]/50 border border-dashed border-[var(--border)] rounded-xl space-y-2"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => onDrop(e, day)}
+              >
+                {filteredEvents.map((e) => (
+                  <div 
+                    key={`event-${e.id}`} 
+                    draggable 
+                    onDragStart={(ev) => onDragStart(ev, e, 'event')}
+                    onClick={() => { setEditingEvent(e); setIsEventModalOpen(true); }}
+                    className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold shadow-sm cursor-pointer hover:scale-[1.02] transition-transform"
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      <Clock className="w-3 h-3" />
+                      <span>{format(e.startTime.toDate ? e.startTime.toDate() : new Date(e.startTime), 'h:mm a')}</span>
+                    </div>
+                    {e.title}
+                  </div>
+                ))}
+                {filteredTasks.map((t) => (
+                  <div 
+                    key={`task-${t.id}`} 
+                    draggable 
+                    onDragStart={(ev) => onDragStart(ev, t, 'task')}
+                    onClick={() => { setEditingTask(t); setIsTaskModalOpen(true); }}
+                    className={cn(
+                      "p-2 rounded-lg text-xs font-bold shadow-sm cursor-pointer hover:scale-[1.02] transition-transform",
+                      t.completed ? "bg-gray-100 text-gray-400 line-through" : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                    )}
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      <CheckSquare className="w-3 h-3" />
+                      <span>{format(t.deadline.toDate ? t.deadline.toDate() : new Date(t.deadline), 'h:mm a')}</span>
+                    </div>
+                    {t.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderDayView = () => {
+    const { filteredTasks, filteredEvents } = getDayItems(currentDate);
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="lg:col-span-2 p-6">
+          <div className="space-y-1">
+            {hours.map(hour => (
+              <div key={hour} className="flex gap-4 min-h-[60px] border-t border-[var(--border)] group">
+                <div className="w-16 text-[10px] font-bold text-[var(--muted-foreground)] py-2 text-right uppercase tracking-widest">
+                  {format(new Date().setHours(hour, 0), 'h a')}
+                </div>
+                <div 
+                  className="flex-1 py-2 relative"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    const d = new Date(currentDate);
+                    d.setHours(hour, 0);
+                    onDrop(e, d);
+                  }}
+                >
+                  {/* Events for this hour */}
+                  <div className="flex flex-wrap gap-2">
+                    {filteredEvents.filter(e => {
+                      const start = e.startTime.toDate ? e.startTime.toDate() : new Date(e.startTime);
+                      return start.getHours() === hour;
+                    }).map((e) => (
+                      <div 
+                        key={`event-${e.id}`} 
+                        draggable 
+                        onDragStart={(ev) => onDragStart(ev, e, 'event')}
+                        onClick={() => { setEditingEvent(e); setIsEventModalOpen(true); }}
+                        className="p-2 rounded-lg bg-blue-500 text-white text-xs font-bold shadow-md cursor-pointer hover:scale-[1.02] transition-transform min-w-[120px]"
+                      >
+                        {e.title}
+                      </div>
+                    ))}
+                    {filteredTasks.filter(t => {
+                      const d = t.deadline.toDate ? t.deadline.toDate() : new Date(t.deadline);
+                      return d.getHours() === hour;
+                    }).map((t) => (
+                      <div 
+                        key={`task-${t.id}`} 
+                        draggable 
+                        onDragStart={(ev) => onDragStart(ev, t, 'task')}
+                        onClick={() => { setEditingTask(t); setIsTaskModalOpen(true); }}
+                        className={cn(
+                          "p-2 rounded-lg text-xs font-bold shadow-md cursor-pointer hover:scale-[1.02] transition-transform min-w-[120px]",
+                          t.completed ? "bg-gray-200 text-gray-500 line-through" : "bg-indigo-500 text-white"
+                        )}
+                      >
+                        {t.title}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+              <Star className="w-4 h-4 text-yellow-500" />
+              Day Summary
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20">
+                <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-widest">Events</span>
+                <span className="text-2xl font-black text-blue-700 dark:text-blue-300">{filteredEvents.length}</span>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20">
+                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-widest">Tasks</span>
+                <span className="text-2xl font-black text-indigo-700 dark:text-indigo-300">{filteredTasks.length}</span>
+              </div>
+            </div>
+          </Card>
+          
+          <Button 
+            onClick={() => setIsEventModalOpen(true)} 
+            className="w-full py-8 rounded-2xl shadow-xl gap-3 text-sm font-bold uppercase tracking-widest"
+          >
+            <Plus className="w-5 h-5" />
+            Add Event
+          </Button>
+          <Button 
+            variant="ghost"
+            onClick={() => setIsTaskModalOpen(true)} 
+            className="w-full py-8 rounded-2xl gap-3 text-sm font-bold uppercase tracking-widest border-2 border-dashed border-[var(--border)]"
+          >
+            <CheckSquare className="w-5 h-5" />
+            Add Task
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto pb-20">
+      {/* Header & Controls */}
+      <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-[var(--primary)] rounded-2xl flex items-center justify-center shadow-lg">
+            <Calendar className="w-8 h-8 text-[var(--primary-foreground)]" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tighter leading-none mb-1">Schedule</h1>
+            <p className="text-[var(--muted-foreground)] text-xs uppercase tracking-[0.2em] font-bold">
+              {format(currentDate, 'MMMM yyyy')}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-[var(--card)] p-1 rounded-xl border border-[var(--border)] shadow-sm">
+            <button 
+              onClick={() => setViewMode('day')}
+              className={cn("px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all", viewMode === 'day' ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]")}
+            >Day</button>
+            <button 
+              onClick={() => setViewMode('week')}
+              className={cn("px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all", viewMode === 'week' ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]")}
+            >Week</button>
+            <button 
+              onClick={() => setViewMode('month')}
+              className={cn("px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all", viewMode === 'month' ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]")}
+            >Month</button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={prev} className="p-3 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" onClick={goToToday} className="px-4 py-3 rounded-xl bg-[var(--card)] border border-[var(--border)] text-[10px] font-bold uppercase tracking-widest">
+              Today
+            </Button>
+            <Button variant="ghost" onClick={next} className="p-3 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          </div>
+
+          <div className="h-8 w-px bg-[var(--border)] mx-2 hidden md:block" />
+
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => setIsEventModalOpen(true)}
+              className="p-3 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90"
+            >
+              <Plus className="w-5 h-5" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4 py-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 shrink-0">
+          <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)]">Filters</span>
+        </div>
+        <select 
+          value={filter.priority}
+          onChange={(e) => setFilter(prev => ({ ...prev, priority: e.target.value }))}
+          className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+        >
+          <option value="all">All Priorities</option>
+          <option value="high">High Priority</option>
+          <option value="medium">Medium Priority</option>
+          <option value="low">Low Priority</option>
+        </select>
+        <select 
+          value={filter.category}
+          onChange={(e) => setFilter(prev => ({ ...prev, category: e.target.value }))}
+          className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+        >
+          <option value="all">All Categories</option>
+          <option value="work">Work</option>
+          <option value="personal">Personal</option>
+          <option value="health">Health</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      {/* Calendar Content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={viewMode + currentDate.toISOString()}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          {viewMode === 'month' && renderMonthView()}
+          {viewMode === 'week' && renderWeekView()}
+          {viewMode === 'day' && renderDayView()}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {isEventModalOpen && (
+          <EventModal 
+            event={editingEvent} 
+            defaultDate={viewMode === 'month' ? selectedDate : currentDate}
+            onClose={() => { setIsEventModalOpen(false); setEditingEvent(null); }} 
+            onSave={handleSaveEvent}
+            onDelete={editingEvent?.id ? () => handleDeleteEvent(editingEvent.id!) : undefined}
+          />
+        )}
+        {isTaskModalOpen && (
+          <TaskModal 
+            task={editingTask} 
+            defaultDate={viewMode === 'month' ? selectedDate : currentDate}
+            onClose={() => { setIsTaskModalOpen(false); setEditingTask(null); }} 
+            onSave={handleSaveTask}
+            onDelete={editingTask?.id ? async () => {
+              setConfirmConfig({
+                title: 'Delete Task',
+                message: 'Are you sure you want to delete this task?',
+                onConfirm: async () => {
+                  try {
+                    await deleteDoc(doc(db, 'tasks', editingTask.id!));
+                    setIsTaskModalOpen(false);
+                    setEditingTask(null);
+                  } catch (err) {
+                    handleFirestoreError(err, OperationType.DELETE, 'tasks');
+                  }
+                }
+              });
+            } : undefined}
+          />
+        )}
+        {confirmConfig && (
+          <ConfirmModal 
+            title={confirmConfig.title}
+            message={confirmConfig.message}
+            onConfirm={() => { confirmConfig.onConfirm(); setConfirmConfig(null); }}
+            onCancel={() => setConfirmConfig(null)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ConfirmModal({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-sm">
+        <Card className="p-8">
+          <h2 className="text-xl font-bold mb-2">{title}</h2>
+          <p className="text-sm text-[var(--muted-foreground)] mb-8 leading-relaxed">{message}</p>
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={onCancel} className="flex-1 py-4 font-bold uppercase tracking-widest text-[10px]">Cancel</Button>
+            <Button variant="danger" onClick={onConfirm} className="flex-1 py-4 font-bold uppercase tracking-widest text-[10px]">Confirm</Button>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
+
+function EventModal({ event, onClose, onSave, onDelete, defaultDate }: { event: CalendarEvent | null; onClose: () => void; onSave: (data: any) => void; onDelete?: () => void; defaultDate?: Date }) {
+  const [title, setTitle] = useState(event?.title || '');
+  const [description, setDescription] = useState(event?.description || '');
+  const [startTime, setStartTime] = useState(format(event?.startTime?.toDate ? event.startTime.toDate() : (event?.startTime ? new Date(event.startTime) : (defaultDate || new Date())), "yyyy-MM-dd'T'HH:mm"));
+  const [endTime, setEndTime] = useState(format(event?.endTime?.toDate ? event.endTime.toDate() : (event?.endTime ? new Date(event.endTime) : new Date((defaultDate || new Date()).getTime() + 3600000)), "yyyy-MM-dd'T'HH:mm"));
+  const [category, setCategory] = useState(event?.category || 'personal');
+  const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'>(event?.repeat || 'none');
+  const [repeatDays, setRepeatDays] = useState<number[]>(event?.repeatDays || []);
+
+  const toggleDay = (dayIndex: number) => {
+    setRepeatDays(prev => 
+      prev.includes(dayIndex) 
+        ? prev.filter(d => d !== dayIndex) 
+        : [...prev, dayIndex].sort()
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md">
+        <Card className="p-8 relative">
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-[var(--muted)]"><X className="w-5 h-5" /></button>
+          <h2 className="text-2xl font-bold mb-6 tracking-tight">{event ? 'Edit Event' : 'New Event'}</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Title</label>
+              <input 
+                value={title} onChange={e => setTitle(e.target.value)}
+                className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                placeholder="What's happening?"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Start</label>
+                <input 
+                  type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)}
+                  className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-xs focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">End</label>
+                <input 
+                  type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)}
+                  className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-xs focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Category</label>
+                <select 
+                  value={category} onChange={e => setCategory(e.target.value)}
+                  className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                >
+                  <option value="work">Work</option>
+                  <option value="personal">Personal</option>
+                  <option value="health">Health</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Repeat</label>
+                <select 
+                  value={repeat} onChange={e => setRepeat(e.target.value as any)}
+                  className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                >
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+            </div>
+
+            {repeat === 'weekly' && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block">Repeat on</label>
+                <div className="flex justify-between gap-1">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => toggleDay(idx)}
+                      className={cn(
+                        "w-8 h-8 rounded-lg text-[10px] font-bold transition-all",
+                        repeatDays.includes(idx) 
+                          ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md" 
+                          : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/80"
+                      )}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Description</label>
+              <textarea 
+                value={description} onChange={e => setDescription(e.target.value)}
+                className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)] min-h-[100px]"
+                placeholder="Add some details..."
+              />
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3">
+            <Button onClick={() => onSave({ title, description, startTime: new Date(startTime), endTime: new Date(endTime), category, repeat, repeatDays })} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+              Save Event
+            </Button>
+            {onDelete && (
+              <Button variant="danger" onClick={onDelete} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+                Delete Event
+              </Button>
+            )}
+            <Button variant="ghost" onClick={onClose} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
+
+function TaskModal({ task, onClose, onSave, onDelete, defaultDate }: { task: Task | null; onClose: () => void; onSave: (data: any) => void; onDelete?: () => void; defaultDate?: Date }) {
+  const [title, setTitle] = useState(task?.title || '');
+  const [priority, setPriority] = useState(task?.priority || 'medium');
+  const [deadline, setDeadline] = useState(format(task?.deadline?.toDate ? task.deadline.toDate() : (task?.deadline ? new Date(task.deadline) : (defaultDate || new Date())), "yyyy-MM-dd'T'HH:mm"));
+  const [notes, setNotes] = useState(task?.notes || '');
+  const [category, setCategory] = useState(task?.category || 'personal');
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md">
+        <Card className="p-8 relative">
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-[var(--muted)]"><X className="w-5 h-5" /></button>
+          <h2 className="text-2xl font-bold mb-6 tracking-tight">{task ? 'Edit Task' : 'New Task'}</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Title</label>
+              <input 
+                value={title} onChange={e => setTitle(e.target.value)}
+                className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                placeholder="What needs to be done?"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Priority</label>
+                <select 
+                  value={priority} onChange={e => setPriority(e.target.value as any)}
+                  className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)]"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Due Date</label>
+                <input 
+                  type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)}
+                  className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-xs focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Category</label>
+              <select 
+                value={category} onChange={e => setCategory(e.target.value)}
+                className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)]"
+              >
+                <option value="work">Work</option>
+                <option value="personal">Personal</option>
+                <option value="health">Health</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] block mb-1">Notes</label>
+              <textarea 
+                value={notes} onChange={e => setNotes(e.target.value)}
+                className="w-full bg-[var(--muted)] border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-[var(--primary)] min-h-[100px]"
+                placeholder="Add some notes..."
+              />
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3">
+            <Button onClick={() => onSave({ title, priority, deadline: new Date(deadline), notes, category })} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+              Save Task
+            </Button>
+            {onDelete && (
+              <Button variant="danger" onClick={onDelete} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+                Delete Task
+              </Button>
+            )}
+            <Button variant="ghost" onClick={onClose} className="w-full py-6 font-bold uppercase tracking-widest text-xs">
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
   );
 }
 
@@ -964,6 +1840,29 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const [isPreview, setIsPreview] = useState(false);
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  const handleDraft = async () => {
+    if (!currentEntry?.content?.trim()) {
+      setDraftError("Please write a few brief thoughts first so I can help you expand them!");
+      setTimeout(() => setDraftError(null), 3000);
+      return;
+    }
+    
+    setIsDrafting(true);
+    setDraftError(null);
+    try {
+      const draft = await getJournalDraft(currentEntry.content, currentEntry.mood || 'Neutral');
+      setCurrentEntry(prev => prev ? { ...prev, content: draft } : null);
+    } catch (err) {
+      console.error("Drafting error:", err);
+      setDraftError("I'm sorry, I had trouble expanding your thoughts. Please try again in a moment.");
+      setTimeout(() => setDraftError(null), 5000);
+    } finally {
+      setIsDrafting(false);
+    }
+  };
 
   const handleNew = () => {
     setCurrentEntry({
@@ -1105,10 +2004,33 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
             <Button onClick={handleSave} className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
               Save Now
             </Button>
+            <Button 
+              variant="ghost" 
+              onClick={handleDraft} 
+              disabled={isDrafting || !currentEntry.content?.trim()}
+              className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2 bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 text-[var(--primary)]"
+            >
+              {isDrafting ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Drafting...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Help me write
+                </>
+              )}
+            </Button>
           </div>
         </header>
 
-        <Card className="p-5 md:p-8 min-h-[60vh] flex flex-col">
+        <Card className="p-5 md:p-8 min-h-[60vh] flex flex-col relative">
+          {draftError && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-in fade-in slide-in-from-top-4">
+              {draftError}
+            </div>
+          )}
           <input 
             type="text" 
             placeholder="Entry Title..." 

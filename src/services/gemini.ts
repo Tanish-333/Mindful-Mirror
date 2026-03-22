@@ -20,6 +20,34 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Pr
   }
 }
 
+function parseAIJSON(text: string) {
+  try {
+    // 1. Remove markdown code blocks if present
+    let cleaned = text.replace(/```json\n?|```/g, "").trim();
+    
+    // 2. Try to fix trailing commas in arrays and objects
+    // This regex looks for a comma followed by a closing bracket or brace, with optional whitespace
+    cleaned = cleaned.replace(/,\s*([\]}])/g, "$1");
+    
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error("Failed to parse AI JSON:", e, "\nOriginal text:", text);
+    
+    // Last resort: try to extract anything that looks like a JSON object
+    try {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) {
+        let extracted = match[0].replace(/,\s*([\]}])/g, "$1");
+        return JSON.parse(extracted);
+      }
+    } catch (innerE) {
+      console.error("Failed to extract JSON from text:", innerE);
+    }
+    
+    throw e;
+  }
+}
+
 export async function getAIInsights(entries: string[], moods: number[], isToday: boolean = false) {
   if (entries.length === 0 && moods.length === 0) return null;
 
@@ -28,15 +56,15 @@ export async function getAIInsights(entries: string[], moods: number[], isToday:
   const moodsText = moods.length > 0 ? moods.join(", ") : "No mood scores provided.";
 
   const contextNote = isToday 
-    ? "These are the user's entries and moods from TODAY." 
-    : "These are the user's most recent journal entries and moods.";
+    ? `These are the user's entries and moods from TODAY (${new Date().toLocaleDateString()}).` 
+    : `These are the user's most recent journal entries and moods as of ${new Date().toLocaleDateString()}.`;
 
   const prompt = `
     Based on the following journal entries and mood scores (1-5), provide 3 personalized self-care tips, a motivational quote, and a brief reflection prompt.
     
     ${contextNote}
     
-    Journal Entries:
+    IMPORTANT: Provide fresh, varied tips that are highly relevant to the user's current state.
     ${entriesText}
     
     Mood Scores:
@@ -62,7 +90,7 @@ export async function getAIInsights(entries: string[], moods: number[], isToday:
 
     const text = response.text;
     if (!text) throw new Error("Empty response from AI");
-    const parsed = JSON.parse(text);
+    const parsed = parseAIJSON(text);
     
     // Ensure structure is correct
     return {
@@ -128,7 +156,7 @@ export async function getDailyInspiration() {
     const text = response.text;
     if (!text) throw new Error("Empty response from AI");
 
-    const result = JSON.parse(text);
+    const result = parseAIJSON(text);
     
     if (result && result.quote) {
       localStorage.setItem(CACHE_KEY, JSON.stringify({
@@ -178,5 +206,34 @@ Example: 'That sounds like a great goal, Alex! I will remember this. [[REMEMBER:
     }
     
     return "I'm sorry, I'm having a little trouble connecting right now. Please check your internet or try again in a moment.";
+  }
+}
+
+export async function getJournalDraft(prompt: string, mood: string) {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+  
+  const systemInstruction = `You are a helpful journaling assistant. Your task is to take a user's brief thoughts and refine them. 
+  Fix any grammar or spelling issues, and slightly expand on the thoughts to make them flow better as a journal entry.
+  Keep it concise and simple—do not write a long essay. Aim for a natural, personal tone.
+  The user's current mood is: ${mood}.
+  Return only the refined text, no titles or extra commentary.`;
+
+  const fullPrompt = `Refine and slightly expand these thoughts: "${prompt}"`;
+
+  try {
+    const response = await withRetry(() => withTimeout(ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: fullPrompt,
+      config: {
+        systemInstruction,
+      },
+    }), TIMEOUT_MS));
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response from AI");
+    return text;
+  } catch (error) {
+    console.error("Error getting journal draft:", error);
+    throw error;
   }
 }
