@@ -35,31 +35,12 @@
       "properties": {
         "title": { "type": "string", "description": "Task description." },
         "priority": { "type": "string", "enum": ["low", "medium", "high"], "description": "Task priority level." },
-        "deadline": { "type": "string", "format": "date-time", "description": "Optional deadline (date and time)." },
-        "notes": { "type": "string", "description": "Additional notes for the task." },
-        "category": { "type": "string", "description": "Task category for filtering." },
+        "deadline": { "type": "string", "format": "date-time", "description": "Optional deadline." },
         "completed": { "type": "boolean", "description": "Whether the task is finished." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
         "userId": { "type": "string", "description": "The ID of the user." }
       },
       "required": ["title", "completed", "createdAt", "userId"]
-    },
-    "CalendarEvent": {
-      "title": "Calendar Event",
-      "description": "A scheduled event in the calendar.",
-      "type": "object",
-      "properties": {
-        "title": { "type": "string", "description": "Event title." },
-        "description": { "type": "string", "description": "Event details." },
-        "startTime": { "type": "string", "format": "date-time", "description": "Event start time." },
-        "endTime": { "type": "string", "format": "date-time", "description": "Event end time." },
-        "category": { "type": "string", "description": "Event category for filtering." },
-        "repeat": { "type": "string", "enum": ["none", "daily", "weekly", "monthly", "yearly"], "description": "Recurrence pattern for the event." },
-        "repeatDays": { "type": "array", "items": { "type": "integer" }, "description": "Specific days of the week for weekly recurrence (0-6, Sunday-Saturday)." },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
-        "userId": { "type": "string", "description": "The ID of the user." }
-      },
-      "required": ["title", "startTime", "endTime", "createdAt", "userId"]
     },
     "UserPreference": {
       "title": "User Preference",
@@ -121,10 +102,6 @@
     "/memories/{memoryId}": {
       "schema": "Memory",
       "description": "Collection of AI memories about the user."
-    },
-    "/calendarEvents/{eventId}": {
-      "schema": "CalendarEvent",
-      "description": "Collection of user calendar events."
     }
   }
 }

@@ -20,34 +20,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Pr
   }
 }
 
-function parseAIJSON(text: string) {
-  try {
-    // 1. Remove markdown code blocks if present
-    let cleaned = text.replace(/```json\n?|```/g, "").trim();
-    
-    // 2. Try to fix trailing commas in arrays and objects
-    // This regex looks for a comma followed by a closing bracket or brace, with optional whitespace
-    cleaned = cleaned.replace(/,\s*([\]}])/g, "$1");
-    
-    return JSON.parse(cleaned);
-  } catch (e) {
-    console.error("Failed to parse AI JSON:", e, "\nOriginal text:", text);
-    
-    // Last resort: try to extract anything that looks like a JSON object
-    try {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        let extracted = match[0].replace(/,\s*([\]}])/g, "$1");
-        return JSON.parse(extracted);
-      }
-    } catch (innerE) {
-      console.error("Failed to extract JSON from text:", innerE);
-    }
-    
-    throw e;
-  }
-}
-
 export async function getAIInsights(entries: string[], moods: number[], isToday: boolean = false) {
   if (entries.length === 0 && moods.length === 0) return null;
 
@@ -90,7 +62,7 @@ export async function getAIInsights(entries: string[], moods: number[], isToday:
 
     const text = response.text;
     if (!text) throw new Error("Empty response from AI");
-    const parsed = parseAIJSON(text);
+    const parsed = JSON.parse(text);
     
     // Ensure structure is correct
     return {
@@ -156,7 +128,7 @@ export async function getDailyInspiration() {
     const text = response.text;
     if (!text) throw new Error("Empty response from AI");
 
-    const result = parseAIJSON(text);
+    const result = JSON.parse(text);
     
     if (result && result.quote) {
       localStorage.setItem(CACHE_KEY, JSON.stringify({
