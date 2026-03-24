@@ -12,7 +12,10 @@ service cloud.firestore {
     // Fields: mood (int), emoji (string), note (string), createdAt (timestamp), userId (string)
     //
     // Collection: tasks
-    // Fields: title (string), priority (string), deadline (timestamp), completed (bool), createdAt (timestamp), userId (string)
+    // Fields: title (string), priority (string), deadline (timestamp), notes (string), category (string), completed (bool), createdAt (timestamp), userId (string)
+    //
+    // Collection: calendarEvents
+    // Fields: title (string), description (string), startTime (timestamp), endTime (timestamp), category (string), repeat (string), repeatDays (list), createdAt (timestamp), userId (string)
     //
     // Collection: userPreferences
     // Fields: theme (string), colorTheme (string), notificationsEnabled (bool), userId (string)
@@ -38,6 +41,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((request.auth.token.email == "tanishdave333@gmail.com" && request.auth.token.email_verified == true) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
     function isValidJournal(data) {
       return data.content is string && data.content.size() > 0 && data.content.size() < 50000 &&
              data.userId == request.auth.uid;
@@ -50,6 +59,19 @@ service cloud.firestore {
 
     function isValidTask(data) {
       return data.title is string && data.title.size() > 0 && data.title.size() < 1000 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 5000)) &&
+             (!('category' in data) || (data.category is string && data.category.size() < 100)) &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidCalendarEvent(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 1000 &&
+             data.startTime is timestamp && data.endTime is timestamp &&
+             data.startTime <= data.endTime &&
+             (!('description' in data) || (data.description is string && data.description.size() < 5000)) &&
+             (!('category' in data) || (data.category is string && data.category.size() < 100)) &&
+             (!('repeat' in data) || (data.repeat in ['none', 'daily', 'weekly', 'monthly', 'yearly'])) &&
+             (!('repeatDays' in data) || (data.repeatDays is list && data.repeatDays.size() <= 7)) &&
              data.userId == request.auth.uid;
     }
 
@@ -69,45 +91,52 @@ service cloud.firestore {
 
     // Rules
     match /journalEntries/{entryId} {
-      allow read: if isDocOwner();
-      allow create: if isAuthenticated() && isValidJournal(request.resource.data);
-      allow update: if isDocOwner() && isValidJournal(request.resource.data);
-      allow delete: if isDocOwner();
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && (isValidJournal(request.resource.data) || isAdmin());
+      allow update: if (isDocOwner() || isAdmin()) && (isValidJournal(request.resource.data) || isAdmin());
+      allow delete: if isDocOwner() || isAdmin();
     }
 
     match /moodLogs/{logId} {
-      allow read: if isDocOwner();
-      allow create: if isAuthenticated() && isValidMood(request.resource.data);
-      allow update: if isDocOwner() && isValidMood(request.resource.data);
-      allow delete: if isDocOwner();
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && (isValidMood(request.resource.data) || isAdmin());
+      allow update: if (isDocOwner() || isAdmin()) && (isValidMood(request.resource.data) || isAdmin());
+      allow delete: if isDocOwner() || isAdmin();
     }
 
     match /tasks/{taskId} {
-      allow read: if isDocOwner();
-      allow create: if isAuthenticated() && isValidTask(request.resource.data);
-      allow update: if isDocOwner() && isValidTask(request.resource.data);
-      allow delete: if isDocOwner();
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && (isValidTask(request.resource.data) || isAdmin());
+      allow update: if (isDocOwner() || isAdmin()) && (isValidTask(request.resource.data) || isAdmin());
+      allow delete: if isDocOwner() || isAdmin();
     }
 
     match /userPreferences/{prefId} {
-      allow read: if isDocOwner();
-      allow create: if isAuthenticated() && isValidPreference(request.resource.data);
-      allow update: if isDocOwner() && isValidPreference(request.resource.data);
-      allow delete: if isDocOwner();
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && (isValidPreference(request.resource.data) || isAdmin());
+      allow update: if (isDocOwner() || isAdmin()) && (isValidPreference(request.resource.data) || isAdmin());
+      allow delete: if isDocOwner() || isAdmin();
     }
 
     match /savedInspirations/{inspId} {
-      allow read: if isDocOwner();
-      allow create: if isAuthenticated() && isValidInspiration(request.resource.data);
-      allow update: if isDocOwner() && isValidInspiration(request.resource.data);
-      allow delete: if isDocOwner();
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && (isValidInspiration(request.resource.data) || isAdmin());
+      allow update: if (isDocOwner() || isAdmin()) && (isValidInspiration(request.resource.data) || isAdmin());
+      allow delete: if isDocOwner() || isAdmin();
     }
 
     match /memories/{memoryId} {
-      allow read: if isDocOwner();
-      allow create: if isAuthenticated() && isValidMemory(request.resource.data);
-      allow update: if isDocOwner() && isValidMemory(request.resource.data);
-      allow delete: if isDocOwner();
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && (isValidMemory(request.resource.data) || isAdmin());
+      allow update: if (isDocOwner() || isAdmin()) && (isValidMemory(request.resource.data) || isAdmin());
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /calendarEvents/{eventId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && (isValidCalendarEvent(request.resource.data) || isAdmin());
+      allow update: if (isDocOwner() || isAdmin()) && (isValidCalendarEvent(request.resource.data) || isAdmin());
+      allow delete: if isDocOwner() || isAdmin();
     }
   }
 }

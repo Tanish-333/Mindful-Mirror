@@ -145,6 +145,55 @@ export async function getDailyInspiration() {
   }
 }
 
+export async function getDeepJournalAnalysis(entries: { title: string, content: string, createdAt: any }[]) {
+  if (entries.length === 0) return null;
+
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+  
+  const entriesText = entries.map(e => {
+    const date = e.createdAt?.toDate ? e.createdAt.toDate().toLocaleDateString() : new Date(e.createdAt).toLocaleDateString();
+    return `Date: ${date}\nTitle: ${e.title}\nContent: ${e.content}`;
+  }).join("\n---\n");
+
+  const prompt = `
+    Analyze the following journal entries and provide a deep, insightful report on the user's emotional patterns, recurring themes, and progress over time.
+    
+    Journal Entries:
+    ${entriesText}
+    
+    Provide the analysis in a structured way with the following sections:
+    1. Emotional Landscape: A summary of the overall emotional tone.
+    2. Recurring Themes: Key topics or people that appear frequently.
+    3. Growth & Progress: How the user's perspective or coping mechanisms have evolved.
+    4. Actionable Advice: 3 specific, deep suggestions for personal growth based on these entries.
+    
+    Return the response in JSON format with the following structure:
+    {
+      "emotionalLandscape": "string",
+      "themes": ["theme1", "theme2", "theme3"],
+      "growth": "string",
+      "advice": ["advice1", "advice2", "advice3"]
+    }
+  `;
+
+  try {
+    const response = await withRetry(() => withTimeout(ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      },
+    }), 30000)); // Longer timeout for deep analysis
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response from AI");
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Error getting deep analysis:", error);
+    throw error;
+  }
+}
+
 export async function getAIChatResponse(message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[], memories: string[] = [], retryCount = 0): Promise<string> {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });

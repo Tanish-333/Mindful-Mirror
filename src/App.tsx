@@ -76,8 +76,9 @@ import Markdown from 'react-markdown';
 
 import { db, auth } from './firebase';
 import { JournalEntry, MoodLog, Task, UserPreference, SavedInspiration, Memory } from './types';
-import { getAIInsights, getDailyInspiration, getAIChatResponse, getJournalDraft } from './services/gemini';
+import { getAIInsights, getDailyInspiration, getAIChatResponse, getJournalDraft, getDeepJournalAnalysis } from './services/gemini';
 import { Card, Button, cn } from './components/ui';
+import { MessageSquare, Send, User as UserIcon, Bot } from 'lucide-react';
 
 // --- Error Handling ---
 enum OperationType {
@@ -175,6 +176,83 @@ export default function App() {
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // --- AI Chat State ---
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([
+    { role: 'model', text: "Hi! I'm Lumina, your mindfulness companion. How are you feeling today?" }
+  ]);
+  const MAX_USER_MESSAGES = 15;
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (isChatOpen) {
+      scrollToBottom();
+    }
+  }, [chatMessages, isChatOpen]);
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isChatLoading) return;
+
+    const userMessage = chatInput.trim();
+    const userCount = chatMessages.filter(m => m.role === 'user').length;
+    
+    if (userCount >= MAX_USER_MESSAGES) return;
+
+    setChatInput('');
+    
+    const newUserMessage = { role: 'user' as const, text: userMessage };
+    const updatedMessages = [...chatMessages, newUserMessage];
+    
+    setChatMessages(updatedMessages);
+    setIsChatLoading(true);
+
+    try {
+      // History should not include the current message
+      const history = updatedMessages.slice(0, -1).map(m => ({
+        role: m.role as 'user' | 'model',
+        parts: [{ text: m.text }]
+      }));
+      
+      const memoriesText = memories.map(m => m.content);
+      const response = await getAIChatResponse(userMessage, history, memoriesText);
+      
+      // Check for memory tags
+      if (response.includes('[[REMEMBER:')) {
+        const match = response.match(/\[\[REMEMBER: (.*?)\]\]/);
+        if (match && match[1]) {
+          const memoryContent = match[1];
+          await addDoc(collection(db, 'memories'), {
+            content: memoryContent,
+            createdAt: serverTimestamp(),
+            userId: user?.uid
+          });
+        }
+      }
+
+      // Clean response from tags
+      const cleanResponse = response.replace(/\[\[REMEMBER: .*?\]\]/g, '').trim();
+      setChatMessages(prev => [...prev, { role: 'model', text: cleanResponse }]);
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatMessages(prev => [...prev, { role: 'model', text: "I'm sorry, I'm having trouble thinking right now. Could you try again?" }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const handleResetChat = () => {
+    setChatMessages([
+      { role: 'model', text: "Hi! I'm Lumina, your mindfulness companion. How are you feeling today?" }
+    ]);
+    setChatInput('');
+  };
 
   // --- Auth & Initial Setup ---
   useEffect(() => {
@@ -480,6 +558,139 @@ export default function App() {
         </AnimatePresence>
 
         {/* AI Chat Box */}
+        <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-4">
+          <AnimatePresence>
+            {isChatOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="w-[90vw] md:w-[400px] h-[500px] md:h-[600px] flex flex-col"
+              >
+                <Card className="flex-1 flex flex-col overflow-hidden shadow-2xl border-[var(--primary)]/20">
+                  <div className="p-4 bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">Lumina AI</p>
+                        <p className="text-[10px] opacity-70 uppercase tracking-widest font-medium">
+                          {chatMessages.filter(m => m.role === 'user').length}/{MAX_USER_MESSAGES} User Messages
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={handleResetChat}
+                        title="Reset Chat"
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => setIsChatOpen(false)}
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[var(--background)]">
+                    {chatMessages.map((msg, i) => (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          "flex gap-3 max-w-[85%]",
+                          msg.role === 'user' ? "ml-auto flex-row-reverse" : "mr-auto"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                          msg.role === 'user' ? "bg-[var(--muted)]" : "bg-[var(--primary)]/10 text-[var(--primary)]"
+                        )}>
+                          {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                        </div>
+                        <div className={cn(
+                          "p-3 rounded-2xl text-sm leading-relaxed",
+                          msg.role === 'user' 
+                            ? "bg-[var(--primary)] text-[var(--primary-foreground)] rounded-tr-none" 
+                            : "bg-[var(--muted)] text-[var(--foreground)] rounded-tl-none"
+                        )}>
+                          <Markdown>{msg.text}</Markdown>
+                        </div>
+                      </div>
+                    ))}
+                    {isChatLoading && (
+                      <div className="flex gap-3 mr-auto max-w-[85%]">
+                        <div className="w-8 h-8 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                          <Bot className="w-4 h-4" />
+                        </div>
+                        <div className="p-3 rounded-2xl bg-[var(--muted)] text-[var(--foreground)] rounded-tl-none">
+                          <div className="flex gap-1">
+                            <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1.5 h-1.5 bg-current rounded-full" />
+                            <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1.5 h-1.5 bg-current rounded-full" />
+                            <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1.5 h-1.5 bg-current rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <div className="p-4 border-t border-[var(--border)] bg-[var(--card)]">
+                    {chatMessages.filter(m => m.role === 'user').length >= MAX_USER_MESSAGES ? (
+                      <div className="text-center py-2">
+                        <p className="text-xs text-red-500 font-medium mb-2">Message limit reached (15/15)</p>
+                        <Button 
+                          onClick={handleResetChat}
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-2 text-[10px] uppercase tracking-widest"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Reset Chat to Continue
+                        </Button>
+                      </div>
+                    ) : (
+                      <form 
+                        onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                        className="flex gap-2"
+                      >
+                        <input 
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          placeholder="Type your message..."
+                          className="flex-1 bg-[var(--muted)] border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] transition-all"
+                        />
+                        <Button 
+                          type="submit" 
+                          disabled={!chatInput.trim() || isChatLoading}
+                          className="p-2 h-auto rounded-xl"
+                        >
+                          <Send className="w-5 h-5" />
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className={cn(
+              "w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl transition-all hover:scale-105 active:scale-95",
+              isChatOpen 
+                ? "bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]" 
+                : "bg-[var(--primary)] text-[var(--primary-foreground)]"
+            )}
+          >
+            {isChatOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
+          </button>
+        </div>
 
       {/* Logout Confirmation Modal */}
         <AnimatePresence>
@@ -639,9 +850,10 @@ export default function App() {
                   insights={aiInsights} 
                   fetchInsights={fetchInsights} 
                   loadingInsights={loadingInsights} 
+                  onOpenChat={() => setIsChatOpen(true)}
                 />
               )}
-              {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} />}
+              {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} />}
               {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} />}
               {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} />}
               {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} />}
@@ -772,8 +984,8 @@ function AboutModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   );
 }
 
-function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights }: any) {
-  const moodData = moods.slice(0, 7).reverse().map((m: any) => ({
+function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights, onOpenChat }: any) {
+  const moodData = moods.slice(0, 15).reverse().map((m: any) => ({
     date: format(m.createdAt?.toDate() || new Date(), 'MMM d'),
     mood: m.mood
   }));
@@ -788,18 +1000,24 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Overview</h1>
           <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">A summary of your recent wellness and productivity.</p>
         </div>
-        <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || (entries.length === 0 && moods.length === 0)} className="gap-2 w-full md:w-auto py-5 md:py-2 relative overflow-hidden">
-          <Sparkles className={cn("w-4 h-4", loadingInsights && "animate-spin")} />
-          {loadingInsights ? "Analyzing..." : "AI Analysis"}
-          {loadingInsights && (
-            <motion.div 
-              className="absolute bottom-0 left-0 h-0.5 bg-[var(--primary)]"
-              initial={{ width: 0 }}
-              animate={{ width: '100%' }}
-              transition={{ duration: 15, ease: "linear" }}
-            />
-          )}
-        </Button>
+        <div className="flex gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={onOpenChat} className="gap-2 flex-1 md:flex-none py-5 md:py-2">
+            <MessageSquare className="w-4 h-4" />
+            Chat with Lumina
+          </Button>
+          <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || (entries.length === 0 && moods.length === 0)} className="gap-2 flex-1 md:flex-none py-5 md:py-2 relative overflow-hidden">
+            <Sparkles className={cn("w-4 h-4", loadingInsights && "animate-spin")} />
+            {loadingInsights ? "Analyzing..." : "AI Analysis"}
+            {loadingInsights && (
+              <motion.div 
+                className="absolute bottom-0 left-0 h-0.5 bg-[var(--primary)]"
+                initial={{ width: 0 }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 15, ease: "linear" }}
+              />
+            )}
+          </Button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
@@ -958,7 +1176,7 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
   );
 }
 
-function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: string }) {
+function JournalView({ entries, userId, onOpenChat }: { entries: JournalEntry[]; userId: string; onOpenChat: () => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentEntry, setCurrentEntry] = useState<Partial<JournalEntry> | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'already-saved'>('idle');
@@ -972,6 +1190,25 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
   const [isPreview, setIsPreview] = useState(false);
   const [isDrafting, setIsDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
+
+  // --- Deep Analysis State ---
+  const [isDeepAnalyzing, setIsDeepAnalyzing] = useState(false);
+  const [deepAnalysis, setDeepAnalysis] = useState<any>(null);
+  const [showDeepAnalysisModal, setShowDeepAnalysisModal] = useState(false);
+
+  const handleDeepAnalysis = async () => {
+    if (entries.length === 0) return;
+    setIsDeepAnalyzing(true);
+    try {
+      const analysis = await getDeepJournalAnalysis(entries);
+      setDeepAnalysis(analysis);
+      setShowDeepAnalysisModal(true);
+    } catch (err) {
+      console.error("Deep analysis error:", err);
+    } finally {
+      setIsDeepAnalyzing(false);
+    }
+  };
 
   const handleDraft = async () => {
     if (!currentEntry?.content?.trim()) {
@@ -1203,12 +1440,130 @@ function JournalView({ entries, userId }: { entries: JournalEntry[]; userId: str
 
   return (
     <div className="space-y-6">
+      {/* Deep Analysis Modal */}
+      <AnimatePresence>
+        {showDeepAnalysisModal && deepAnalysis && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-3xl my-8"
+            >
+              <Card className="p-6 md:p-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4">
+                  <button onClick={() => setShowDeepAnalysisModal(false)} className="p-2 hover:bg-[var(--muted)] rounded-full transition-colors">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-12 h-12 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-2xl flex items-center justify-center shadow-lg">
+                    <Brain className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Deep Journal Analysis</h2>
+                    <p className="text-[var(--muted-foreground)] text-sm uppercase tracking-widest font-bold">AI-Powered Insights</p>
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  <section>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--primary)] mb-3 flex items-center gap-2">
+                      <Smile className="w-4 h-4" />
+                      Emotional Landscape
+                    </h3>
+                    <p className="text-[var(--foreground)] leading-relaxed text-lg font-medium italic">
+                      "{deepAnalysis.emotionalLandscape}"
+                    </p>
+                  </section>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <section>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--primary)] mb-3 flex items-center gap-2">
+                        <Star className="w-4 h-4" />
+                        Recurring Themes
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {deepAnalysis.themes.map((theme: string, i: number) => (
+                          <span key={i} className="px-3 py-1 bg-[var(--muted)] text-[var(--foreground)] rounded-full text-xs font-bold uppercase tracking-wider border border-[var(--border)]">
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--primary)] mb-3 flex items-center gap-2">
+                        <RotateCcw className="w-4 h-4" />
+                        Growth & Progress
+                      </h3>
+                      <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">
+                        {deepAnalysis.growth}
+                      </p>
+                    </section>
+                  </div>
+
+                  <section className="p-6 bg-[var(--primary)]/5 rounded-2xl border border-[var(--primary)]/10">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--primary)] mb-4 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Actionable Advice
+                    </h3>
+                    <ul className="space-y-4">
+                      {deepAnalysis.advice.map((item: string, i: number) => (
+                        <li key={i} className="flex items-start gap-4">
+                          <div className="w-6 h-6 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                            {i + 1}
+                          </div>
+                          <p className="text-sm md:text-base font-medium">{item}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                </div>
+
+                <div className="mt-10 flex justify-center">
+                  <Button onClick={() => setShowDeepAnalysisModal(false)} className="px-10 py-6 font-bold uppercase tracking-widest text-xs">
+                    Got it, thanks!
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Journal</h1>
           <p className="text-[var(--muted-foreground)]">Your personal collection of thoughts.</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
+          <Button 
+            variant="outline" 
+            onClick={onOpenChat} 
+            className="gap-2 flex-1 md:flex-none py-5 md:py-2"
+          >
+            <MessageSquare className="w-4 h-4" />
+            Chat
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleDeepAnalysis} 
+            disabled={isDeepAnalyzing || entries.length < 3} 
+            className="gap-2 flex-1 md:flex-none py-5 md:py-2 relative overflow-hidden"
+          >
+            <Brain className={cn("w-4 h-4", isDeepAnalyzing && "animate-spin")} />
+            {isDeepAnalyzing ? "Analyzing Patterns..." : "Deep Analysis"}
+            {isDeepAnalyzing && (
+              <motion.div 
+                className="absolute bottom-0 left-0 h-0.5 bg-[var(--primary)]"
+                initial={{ width: 0 }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 30, ease: "linear" }}
+              />
+            )}
+          </Button>
           {entries.length > 0 && (
             <Button 
               variant="outline" 
