@@ -50,6 +50,9 @@ export interface UserPreference {
   notificationsEnabled: boolean;
   chatResetsToday: number;
   lastResetDay: string; // Format: YYYY-MM-DD
+  currentStreak: number;
+  longestStreak: number;
+  lastActivityDate: string | null; // Format: YYYY-MM-DD
   userId: string;
 }
 

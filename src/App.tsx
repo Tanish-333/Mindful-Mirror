@@ -57,7 +57,8 @@ import {
   Brain,
   Menu,
   X,
-  RotateCcw
+  RotateCcw,
+  Flame
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -323,6 +324,68 @@ export default function App() {
     const interval = setInterval(checkNotification, 60000); // Check every minute
     return () => clearInterval(interval);
   }, [preferences?.notificationsEnabled, lastNotifiedDay]);
+
+  // --- Streak Management ---
+  useEffect(() => {
+    if (!preferences || !user) return;
+    
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const lastActivity = preferences.lastActivityDate;
+    
+    if (lastActivity && lastActivity !== todayStr) {
+      const lastDate = new Date(lastActivity);
+      const todayDate = new Date(todayStr);
+      const diffTime = Math.abs(todayDate.getTime() - lastDate.getTime());
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays > 1 && preferences.currentStreak > 0) {
+        // Streak broken
+        updateDoc(doc(db, 'userPreferences', preferences.id!), {
+          currentStreak: 0
+        }).catch(err => console.error("Failed to reset broken streak:", err));
+      }
+    }
+  }, [preferences?.lastActivityDate, user?.uid]);
+
+  const updateStreak = async () => {
+    if (!user || !preferences) return;
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const lastActivity = preferences.lastActivityDate;
+
+    if (lastActivity === todayStr) return;
+
+    let newStreak = 1;
+    if (lastActivity) {
+      const lastDate = new Date(lastActivity);
+      const todayDate = new Date(todayStr);
+      const diffTime = Math.abs(todayDate.getTime() - lastDate.getTime());
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) {
+        newStreak = (preferences.currentStreak || 0) + 1;
+      } else {
+        newStreak = 1;
+      }
+    }
+
+    const newLongestStreak = Math.max(newStreak, preferences.longestStreak || 0);
+
+    try {
+      if (preferences.id) {
+        await updateDoc(doc(db, 'userPreferences', preferences.id), {
+          currentStreak: newStreak,
+          longestStreak: newLongestStreak,
+          lastActivityDate: todayStr
+        });
+      }
+    } catch (err) {
+      console.error("Failed to update streak:", err);
+    }
+  };
+
   useEffect(() => {
     if (preferences?.theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -371,6 +434,9 @@ export default function App() {
           notificationsEnabled: true,
           chatResetsToday: 0,
           lastResetDay: getResetDay(),
+          currentStreak: 0,
+          longestStreak: 0,
+          lastActivityDate: null,
           userId: user.uid
         };
         addDoc(collection(db, 'userPreferences'), newPref).catch(err => handleFirestoreError(err, OperationType.CREATE, 'userPreferences'));
@@ -886,10 +952,11 @@ export default function App() {
                   fetchInsights={fetchInsights} 
                   loadingInsights={loadingInsights} 
                   onOpenChat={() => setIsChatOpen(true)}
+                  preferences={preferences}
                 />
               )}
-              {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} />}
-              {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} />}
+              {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} onActivity={updateStreak} />}
+              {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} onActivity={updateStreak} />}
               {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} />}
               {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} />}
               {activeTab === 'settings' && <SettingsView preferences={preferences} onLogout={handleLogout} user={user} />}
@@ -1019,7 +1086,7 @@ function AboutModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   );
 }
 
-function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights, onOpenChat }: any) {
+function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights, onOpenChat, preferences }: any) {
   const moodData = moods.slice(0, 15).reverse().map((m: any) => ({
     date: format(m.createdAt?.toDate() || new Date(), 'MMM d'),
     mood: m.mood
@@ -1027,6 +1094,8 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
 
   const completedTasks = tasks.filter((t: any) => t.completed).length;
   const pendingTasks = tasks.length - completedTasks;
+  const currentStreak = preferences?.currentStreak || 0;
+  const longestStreak = preferences?.longestStreak || 0;
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-6xl mx-auto">
@@ -1056,6 +1125,45 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+        {/* Streak Card */}
+        <Card className="p-6 bg-gradient-to-br from-orange-500 to-red-600 text-white border-none shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+              <Flame className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs opacity-80 uppercase tracking-widest font-bold">Current Streak</p>
+              <p className="text-3xl font-black">{currentStreak} Days</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Longest Streak Card */}
+        <Card className="p-6 bg-gradient-to-br from-blue-500 to-indigo-600 text-white border-none shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+              <Star className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs opacity-80 uppercase tracking-widest font-bold">Longest Streak</p>
+              <p className="text-3xl font-black">{longestStreak} Days</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Total Entries Card */}
+        <Card className="p-6 bg-[var(--card)] border-[var(--border)] shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-[var(--primary)]/10 text-[var(--primary)] rounded-2xl flex items-center justify-center">
+              <Book className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-widest font-bold">Total Entries</p>
+              <p className="text-3xl font-black text-[var(--foreground)]">{entries.length}</p>
+            </div>
+          </div>
+        </Card>
+
         {/* Daily Quote Card */}
         <Card className="md:col-span-2 p-6 md:p-8 bg-[var(--primary)] text-[var(--primary-foreground)] border-none relative overflow-hidden">
           {loadingQuote && !quote && (
@@ -1211,7 +1319,7 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
   );
 }
 
-function JournalView({ entries, userId, onOpenChat }: { entries: JournalEntry[]; userId: string; onOpenChat: () => void }) {
+function JournalView({ entries, userId, onOpenChat, onActivity }: { entries: JournalEntry[]; userId: string; onOpenChat: () => void; onActivity: () => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentEntry, setCurrentEntry] = useState<Partial<JournalEntry> | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'already-saved'>('idle');
@@ -1317,6 +1425,7 @@ function JournalView({ entries, userId, onOpenChat }: { entries: JournalEntry[];
       }
       setLastSavedHash(currentHash);
       setSaveStatus('saved');
+      onActivity();
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'journalEntries');
@@ -1722,7 +1831,7 @@ function JournalView({ entries, userId, onOpenChat }: { entries: JournalEntry[];
 }
 
 
-function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
+function MoodView({ moods, userId, onActivity }: { moods: MoodLog[]; userId: string; onActivity: () => void }) {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -1765,6 +1874,7 @@ function MoodView({ moods, userId }: { moods: MoodLog[]; userId: string }) {
       setSelectedMood(null);
       setNote('');
       setSaveStatus('saved');
+      onActivity();
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'moodLogs');
