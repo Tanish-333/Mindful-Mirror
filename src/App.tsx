@@ -663,13 +663,6 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button 
-                        onClick={handleResetChat}
-                        title="Reset Chat"
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </button>
-                      <button 
                         onClick={() => setIsChatOpen(false)}
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
                       >
