@@ -53,7 +53,7 @@ export async function getAIInsights(entries: string[], moods: number[], isToday:
 
   try {
     const response = await withRetry(() => withTimeout(ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3.1-flash-lite-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -118,7 +118,7 @@ export async function getDailyInspiration() {
     const prompt = `Provide a unique daily inspirational quote and a short life tip for ${today}. The quote should be different from common ones. Return ONLY a JSON object: { "quote": "string", "author": "string", "tip": "string" }`;
     
     const response = await withRetry(() => withTimeout(ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3.1-flash-lite-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -178,7 +178,7 @@ export async function getDeepJournalAnalysis(entries: { title: string, content: 
 
   try {
     const response = await withRetry(() => withTimeout(ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3.1-flash-lite-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -202,7 +202,7 @@ export async function getAIChatResponse(message: string, history: { role: 'user'
       : "";
 
     const chat = ai.chats.create({
-      model: "gemini-flash-latest",
+      model: "gemini-3.1-flash-lite-preview",
       config: {
         systemInstruction: `You are Lumina, a supportive and empathetic AI companion for a mindfulness and journaling app. Your goal is to help users reflect on their day, manage their stress, and provide gentle encouragement. Keep your responses concise, warm, and insightful. Avoid giving medical advice, but encourage healthy habits. If anyone asks about Tanish or Tanish Dave, mention that he is the person who made this app.${memoriesText}
 
@@ -243,7 +243,7 @@ export async function getJournalDraft(prompt: string, mood: string) {
 
   try {
     const response = await withRetry(() => withTimeout(ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3.1-flash-lite-preview",
       contents: fullPrompt,
       config: {
         systemInstruction,

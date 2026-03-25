@@ -176,6 +176,23 @@ export default function App() {
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [lastNotifiedDay, setLastNotifiedDay] = useState<string | null>(null);
+
+  // --- Reset Day Helper ---
+  const getResetDay = () => {
+    const now = new Date();
+    const resetTime = new Date(now);
+    resetTime.setHours(6, 30, 0, 0);
+    
+    // If it's before 6:30 AM, the "reset day" is yesterday
+    if (now < resetTime) {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      return yesterday.toISOString().split('T')[0];
+    }
+    
+    return now.toISOString().split('T')[0];
+  };
 
   // --- AI Chat State ---
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -247,7 +264,35 @@ export default function App() {
     }
   };
 
-  const handleResetChat = () => {
+  const handleResetChat = async () => {
+    if (!user || !preferences) return;
+
+    const currentResetDay = getResetDay();
+    let currentResets = preferences.chatResetsToday || 0;
+    
+    // Reset count if it's a new day
+    if (preferences.lastResetDay !== currentResetDay) {
+      currentResets = 0;
+    }
+
+    if (currentResets >= 10) {
+      setChatMessages(prev => [...prev, { role: 'model', text: "You've reached your daily limit of 10 chat resets. Resets refresh every day at 6:30 AM." }]);
+      return;
+    }
+
+    // Update reset count in Firestore
+    try {
+      if (preferences.id) {
+        await updateDoc(doc(db, 'userPreferences', preferences.id), {
+          chatResetsToday: currentResets + 1,
+          lastResetDay: currentResetDay
+        });
+      }
+    } catch (err) {
+      console.error("Failed to update reset count:", err);
+      handleFirestoreError(err, OperationType.UPDATE, 'userPreferences');
+    }
+
     setChatMessages([
       { role: 'model', text: "Hi! I'm Lumina, your mindfulness companion. How are you feeling today?" }
     ]);
@@ -279,7 +324,36 @@ export default function App() {
     testConnection();
   }, []);
 
-  // --- Theme Management ---
+  // --- Daily Notification & Reset Check ---
+  useEffect(() => {
+    if (!preferences?.notificationsEnabled) return;
+
+    // Request notification permission
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const checkNotification = () => {
+      const now = new Date();
+      const currentDay = now.toISOString().split('T')[0];
+      
+      // Check if it's 6:30 AM (or slightly after)
+      if (now.getHours() === 6 && now.getMinutes() === 30) {
+        if (lastNotifiedDay !== currentDay) {
+          if (Notification.permission === 'granted') {
+            new Notification('Mindful Mirror', {
+              body: 'Good morning! It\'s 6:30 AM. Time to start your daily journal reflection.',
+              icon: '/favicon.ico'
+            });
+          }
+          setLastNotifiedDay(currentDay);
+        }
+      }
+    };
+
+    const interval = setInterval(checkNotification, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [preferences?.notificationsEnabled, lastNotifiedDay]);
   useEffect(() => {
     if (preferences?.theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -326,6 +400,8 @@ export default function App() {
           theme: 'light',
           colorTheme: 'indigo',
           notificationsEnabled: true,
+          chatResetsToday: 0,
+          lastResetDay: getResetDay(),
           userId: user.uid
         };
         addDoc(collection(db, 'userPreferences'), newPref).catch(err => handleFirestoreError(err, OperationType.CREATE, 'userPreferences'));
@@ -542,7 +618,7 @@ export default function App() {
             <p className="mt-12 text-xs text-[var(--muted-foreground)] uppercase tracking-widest font-medium">
               Secure • Private • Minimal
               <br />
-              <span className="mt-2 block font-bold text-[var(--primary)]">Supports School & Workspace Accounts</span>
+              <span className="mt-2 block font-bold text-[var(--primary)]">Your Private Sanctuary for Self-Reflection</span>
             </p>
           </motion.div>
         </div>
@@ -575,9 +651,14 @@ export default function App() {
                       </div>
                       <div>
                         <p className="font-bold text-sm">Lumina AI</p>
-                        <p className="text-[10px] opacity-70 uppercase tracking-widest font-medium">
-                          {chatMessages.filter(m => m.role === 'user').length}/{MAX_USER_MESSAGES} User Messages
-                        </p>
+                        <div className="flex flex-col">
+                          <p className="text-[10px] opacity-70 uppercase tracking-widest font-medium">
+                            {chatMessages.filter(m => m.role === 'user').length}/{MAX_USER_MESSAGES} User Messages
+                          </p>
+                          <p className="text-[10px] opacity-70 uppercase tracking-widest font-medium">
+                            {10 - (preferences?.lastResetDay === getResetDay() ? (preferences?.chatResetsToday || 0) : 0)} Resets Left Today
+                          </p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

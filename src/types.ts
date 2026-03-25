@@ -48,6 +48,8 @@ export interface UserPreference {
   theme: 'light' | 'dark';
   colorTheme: string;
   notificationsEnabled: boolean;
+  chatResetsToday: number;
+  lastResetDay: string; // Format: YYYY-MM-DD
   userId: string;
 }
 
