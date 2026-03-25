@@ -218,10 +218,7 @@ export default function App() {
     if (!chatInput.trim() || isChatLoading) return;
 
     const userMessage = chatInput.trim();
-    const userCount = chatMessages.filter(m => m.role === 'user').length;
     
-    if (userCount >= MAX_USER_MESSAGES) return;
-
     setChatInput('');
     
     const newUserMessage = { role: 'user' as const, text: userMessage };
@@ -265,34 +262,6 @@ export default function App() {
   };
 
   const handleResetChat = async () => {
-    if (!user || !preferences) return;
-
-    const currentResetDay = getResetDay();
-    let currentResets = preferences.chatResetsToday || 0;
-    
-    // Reset count if it's a new day
-    if (preferences.lastResetDay !== currentResetDay) {
-      currentResets = 0;
-    }
-
-    if (currentResets >= 10) {
-      setChatMessages(prev => [...prev, { role: 'model', text: "You've reached your daily limit of 10 chat resets. Resets refresh every day at 6:30 AM." }]);
-      return;
-    }
-
-    // Update reset count in Firestore
-    try {
-      if (preferences.id) {
-        await updateDoc(doc(db, 'userPreferences', preferences.id), {
-          chatResetsToday: currentResets + 1,
-          lastResetDay: currentResetDay
-        });
-      }
-    } catch (err) {
-      console.error("Failed to update reset count:", err);
-      handleFirestoreError(err, OperationType.UPDATE, 'userPreferences');
-    }
-
     setChatMessages([
       { role: 'model', text: "Hi! I'm Lumina, your mindfulness companion. How are you feeling today?" }
     ]);
@@ -651,14 +620,9 @@ export default function App() {
                       </div>
                       <div>
                         <p className="font-bold text-sm">Lumina AI</p>
-                        <div className="flex flex-col">
-                          <p className="text-[10px] opacity-70 uppercase tracking-widest font-medium">
-                            {chatMessages.filter(m => m.role === 'user').length}/{MAX_USER_MESSAGES} User Messages
-                          </p>
-                          <p className="text-[10px] opacity-70 uppercase tracking-widest font-medium">
-                            {10 - (preferences?.lastResetDay === getResetDay() ? (preferences?.chatResetsToday || 0) : 0)} Resets Left Today
-                          </p>
-                        </div>
+                        <p className="text-[10px] opacity-70 uppercase tracking-widest font-medium">
+                          Mindfulness Companion
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -714,24 +678,22 @@ export default function App() {
                   </div>
 
                   <div className="p-4 border-t border-[var(--border)] bg-[var(--card)]">
-                    {chatMessages.filter(m => m.role === 'user').length >= MAX_USER_MESSAGES ? (
-                      <div className="text-center py-2">
-                        <p className="text-xs text-red-500 font-medium mb-2">Message limit reached (15/15)</p>
-                        <Button 
-                          onClick={handleResetChat}
-                          variant="outline"
-                          size="sm"
-                          className="w-full gap-2 text-[10px] uppercase tracking-widest"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          Reset Chat to Continue
-                        </Button>
-                      </div>
-                    ) : (
-                      <form 
-                        onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-                        className="flex gap-2"
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-[10px] text-[var(--muted-foreground)] italic">
+                        Caution: Chats may run out, use them wisely.
+                      </p>
+                      <button 
+                        onClick={handleResetChat}
+                        className="text-[10px] uppercase tracking-widest font-bold text-[var(--primary)] hover:underline flex items-center gap-1"
                       >
+                        <RotateCcw className="w-3 h-3" />
+                        Reset
+                      </button>
+                    </div>
+                    <form 
+                      onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                      className="flex gap-2"
+                    >
                         <input 
                           value={chatInput}
                           onChange={(e) => setChatInput(e.target.value)}
@@ -746,7 +708,6 @@ export default function App() {
                           <Send className="w-5 h-5" />
                         </Button>
                       </form>
-                    )}
                   </div>
                 </Card>
               </motion.div>
