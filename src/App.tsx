@@ -329,8 +329,7 @@ export default function App() {
   useEffect(() => {
     if (!preferences || !user) return;
     
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getResetDay();
     const lastActivity = preferences.lastActivityDate;
     
     if (lastActivity && lastActivity !== todayStr) {
@@ -351,8 +350,7 @@ export default function App() {
   const updateStreak = async () => {
     if (!user || !preferences) return;
 
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getResetDay();
     const lastActivity = preferences.lastActivityDate;
 
     if (lastActivity === todayStr) return;
@@ -764,6 +762,7 @@ export default function App() {
                           value={chatInput}
                           onChange={(e) => setChatInput(e.target.value)}
                           placeholder="Type your message..."
+                          maxLength={2000}
                           className="flex-1 bg-[var(--muted)] border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] transition-all"
                         />
                         <Button 
