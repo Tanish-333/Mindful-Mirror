@@ -236,7 +236,11 @@ export default function App() {
       }));
       
       const memoriesText = memories.map(m => m.content);
-      const response = await getAIChatResponse(userMessage, history, memoriesText);
+      const response = await getAIChatResponse(userMessage, history, memoriesText, {
+        tasks,
+        moods,
+        journalEntries: entries
+      });
       
       // Check for memory tags
       if (response.includes('[[REMEMBER:')) {
@@ -2407,9 +2411,24 @@ function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedIns
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {saved.map(s => (
-            <Card key={s.id} className="p-6 md:p-8 border-l-4 border-l-[var(--primary)]">
+            <Card key={s.id} className="p-6 md:p-8 border-l-4 border-l-[var(--primary)] group relative overflow-hidden">
+              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={async () => {
+                    try {
+                      await deleteDoc(doc(db, 'savedInspirations', s.id!));
+                    } catch (err) {
+                      handleFirestoreError(err, OperationType.DELETE, 'savedInspirations');
+                    }
+                  }}
+                  className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                  title="Remove from favorites"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
               <Quote className="w-5 h-5 md:w-6 md:h-6 opacity-10 mb-3 md:mb-4" />
-              <p className="text-lg md:text-xl font-serif italic mb-3 md:mb-4 leading-snug tracking-tight">"{s.quote}"</p>
+              <p className="text-lg md:text-xl font-serif italic mb-3 md:mb-4 leading-snug tracking-tight pr-8">"{s.quote}"</p>
               <p className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-widest">— {s.author}</p>
             </Card>
           ))}

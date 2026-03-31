@@ -96,25 +96,12 @@ const FALLBACK_QUOTES = [
 ];
 
 export async function getDailyInspiration() {
-  const CACHE_KEY = 'mindful_mirror_daily_quote_v5';
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   
   const now = new Date();
   const today = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 
   try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      try {
-        const { data, date } = JSON.parse(cached);
-        if (date === today && data && data.quote) {
-          return data;
-        }
-      } catch (e) {
-        console.warn("Failed to parse cached quote", e);
-      }
-    }
-
     const prompt = `Provide a unique daily inspirational quote and a short life tip for ${today}. The quote should be different from common ones. Return ONLY a JSON object: { "quote": "string", "author": "string", "tip": "string" }`;
     
     const response = await withRetry(() => withTimeout(ai.models.generateContent({
@@ -131,10 +118,6 @@ export async function getDailyInspiration() {
     const result = JSON.parse(text);
     
     if (result && result.quote) {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
-        data: result,
-        date: today
-      }));
       return result;
     }
     
@@ -194,12 +177,37 @@ export async function getDeepJournalAnalysis(entries: { title: string, content: 
   }
 }
 
-export async function getAIChatResponse(message: string, history: { role: 'user' | 'model', parts: { text: string }[] }[], memories: string[] = [], retryCount = 0): Promise<string> {
+export async function getAIChatResponse(
+  message: string, 
+  history: { role: 'user' | 'model', parts: { text: string }[] }[], 
+  memories: string[] = [], 
+  appContext?: { tasks: any[], moods: any[], journalEntries: any[] },
+  retryCount = 0
+): Promise<string> {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
     const memoriesText = memories.length > 0 
       ? "\n\nHere are some things you remember about the user:\n" + memories.map(m => "- " + m).join("\n")
       : "";
+
+    let contextText = "";
+    if (appContext) {
+      const { tasks, moods, journalEntries } = appContext;
+      
+      const tasksText = tasks.length > 0 
+        ? "\nUser's Tasks:\n" + tasks.map(t => `- [${t.completed ? 'x' : ' '}] ${t.title}`).join("\n")
+        : "\nUser has no tasks currently.";
+        
+      const moodsText = moods.length > 0
+        ? "\nUser's Recent Moods (1-5 scale):\n" + moods.slice(0, 5).map(m => `- ${m.mood} (${new Date(m.createdAt?.toDate ? m.createdAt.toDate() : m.createdAt).toLocaleDateString()})`).join("\n")
+        : "\nNo mood logs yet.";
+        
+      const journalText = journalEntries.length > 0
+        ? "\nUser's Recent Journal Entries:\n" + journalEntries.slice(0, 3).map(e => `- ${e.title}: ${e.content.substring(0, 100)}...`).join("\n")
+        : "\nNo journal entries yet.";
+        
+      contextText = `\n\nCURRENT USER CONTEXT:\n${tasksText}${moodsText}${journalText}`;
+    }
 
     const chat = ai.chats.create({
       model: "gemini-3.1-flash-lite-preview",
@@ -212,7 +220,7 @@ Here are some rules and features of the app you should be aware of if the user a
 - Daily Resets: The app's daily cycle (for streaks and notifications) resets at 6:30 AM local time.
 - Streak Feature: Users earn a daily streak by journaling or logging their mood. The streak increments once per day after 6:30 AM.
 - Character Limit: The chat input has a limit of 2,000 characters.
-${memoriesText}
+${memoriesText}${contextText}
 
 If the user tells you something important about themselves that you should remember for future sessions (like their name, a goal, a preference, or a significant life event), you MUST include the exact phrase 'I will remember this.' in your response. Additionally, append the following hidden tag at the very end of your message: '[[REMEMBER: <concise summary of the info to remember>]]'. 
 
@@ -231,7 +239,7 @@ Example: 'That sounds like a great goal, Alex! I will remember this. [[REMEMBER:
     if (retryCount < 2) {
       // Wait 1 second before retrying
       await new Promise(resolve => setTimeout(resolve, 1000));
-      return getAIChatResponse(message, history, memories, retryCount + 1);
+      return getAIChatResponse(message, history, memories, appContext, retryCount + 1);
     }
     
     return "I'm sorry, I'm having a little trouble connecting right now. Please check your internet or try again in a moment.";
