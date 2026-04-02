@@ -178,6 +178,7 @@ export default function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [lastNotifiedDay, setLastNotifiedDay] = useState<string | null>(null);
+  const [showStreakPopup, setShowStreakPopup] = useState(false);
 
   // --- Reset Day Helper ---
   const getResetDay = () => {
@@ -382,6 +383,8 @@ export default function App() {
           longestStreak: newLongestStreak,
           lastActivityDate: todayStr
         });
+        setShowStreakPopup(true);
+        setTimeout(() => setShowStreakPopup(false), 4000);
       }
     } catch (err) {
       console.error("Failed to update streak:", err);
@@ -826,6 +829,28 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        {/* Streak Done Popup */}
+        <AnimatePresence>
+          {showStreakPopup && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.9 }}
+              className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
+            >
+              <div className="bg-[var(--primary)] text-[var(--primary-foreground)] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/20 backdrop-blur-md">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <Flame className="w-5 h-5 fill-current" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-black uppercase tracking-widest">Streak Done!</span>
+                  <span className="text-[10px] opacity-80 font-bold uppercase tracking-tighter">Keep the fire burning</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Top Navigation */}
         <nav className="sticky top-0 w-full bg-[var(--card)] border-b border-[var(--border)] z-50">
           <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
@@ -956,6 +981,7 @@ export default function App() {
                   loadingInsights={loadingInsights} 
                   onOpenChat={() => setIsChatOpen(true)}
                   preferences={preferences}
+                  isStreakDoneToday={preferences?.lastActivityDate === getResetDay()}
                 />
               )}
               {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} onActivity={updateStreak} />}
@@ -1089,7 +1115,7 @@ function AboutModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   );
 }
 
-function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights, onOpenChat, preferences }: any) {
+function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights, onOpenChat, preferences, isStreakDoneToday }: any) {
   const moodData = moods.slice(0, 15).reverse().map((m: any) => ({
     date: format(m.createdAt?.toDate() || new Date(), 'MMM d'),
     mood: m.mood
@@ -1129,10 +1155,18 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         {/* Streak Card */}
-        <Card className="p-6 bg-gradient-to-br from-orange-500 to-red-600 text-white border-none shadow-lg">
+        <Card className={cn(
+          "p-6 text-white border-none shadow-lg transition-all duration-500",
+          isStreakDoneToday 
+            ? "bg-gradient-to-br from-orange-500 to-red-600" 
+            : "bg-[var(--muted)] text-[var(--muted-foreground)] grayscale opacity-70"
+        )}>
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Flame className="w-6 h-6" />
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors",
+              isStreakDoneToday ? "bg-white/20" : "bg-black/10"
+            )}>
+              <Flame className={cn("w-6 h-6", isStreakDoneToday && "fill-current")} />
             </div>
             <div>
               <p className="text-xs opacity-80 uppercase tracking-widest font-bold">Current Streak</p>
