@@ -217,8 +217,8 @@ export async function getAIChatResponse(
 Here are some rules and features of the app you should be aware of if the user asks:
 - Chat Reset: Users can reset the chat history at any time using the 'Reset' button.
 - Message Limits: There is no strict message limit, but users are cautioned to use chats wisely as they may run out.
-- Daily Resets: The app's daily cycle (for streaks and notifications) resets at 6:30 AM local time.
-- Streak Feature: Users earn a daily streak by journaling or logging their mood. The streak increments once per day after 6:30 AM.
+- Daily Resets: The app's daily cycle (for streaks and notifications) resets at 12:00 AM local time.
+- Streak Feature: Users earn a daily streak by journaling or logging their mood. The streak increments once per day after 12:00 AM.
 - Character Limit: The chat input has a limit of 2,000 characters.
 ${memoriesText}${contextText}
 

@@ -183,17 +183,10 @@ export default function App() {
   // --- Reset Day Helper ---
   const getResetDay = () => {
     const now = new Date();
-    const resetTime = new Date(now);
-    resetTime.setHours(6, 30, 0, 0);
-    
-    // If it's before 6:30 AM, the "reset day" is yesterday
-    if (now < resetTime) {
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      return yesterday.toISOString().split('T')[0];
-    }
-    
-    return now.toISOString().split('T')[0];
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // --- AI Chat State ---
@@ -312,12 +305,12 @@ export default function App() {
       const now = new Date();
       const currentDay = now.toISOString().split('T')[0];
       
-      // Check if it's 6:30 AM (or slightly after)
-      if (now.getHours() === 6 && now.getMinutes() === 30) {
+      // Check if it's 12:00 AM (or slightly after)
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
         if (lastNotifiedDay !== currentDay) {
           if (Notification.permission === 'granted') {
             new Notification('Mindful Mirror', {
-              body: 'Good morning! It\'s 6:30 AM. Time to start your daily journal reflection.',
+              body: 'A new day has started! Time to start your daily journal reflection.',
               icon: '/favicon.ico'
             });
           }
@@ -338,8 +331,8 @@ export default function App() {
     const lastActivity = preferences.lastActivityDate;
     
     if (lastActivity && lastActivity !== todayStr) {
-      const lastDate = new Date(lastActivity);
-      const todayDate = new Date(todayStr);
+      const lastDate = new Date(lastActivity + 'T00:00:00');
+      const todayDate = new Date(todayStr + 'T00:00:00');
       const diffTime = Math.abs(todayDate.getTime() - lastDate.getTime());
       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
       
@@ -353,23 +346,26 @@ export default function App() {
   }, [preferences?.lastActivityDate, user?.uid]);
 
   const updateStreak = async () => {
-    if (!user || !preferences) return;
+    if (!user || !preferences || preferences.userId !== user.uid) return;
 
     const todayStr = getResetDay();
     const lastActivity = preferences.lastActivityDate;
 
+    // Already updated today
     if (lastActivity === todayStr) return;
 
     let newStreak = 1;
     if (lastActivity) {
-      const lastDate = new Date(lastActivity);
-      const todayDate = new Date(todayStr);
+      const lastDate = new Date(lastActivity + 'T00:00:00');
+      const todayDate = new Date(todayStr + 'T00:00:00');
       const diffTime = Math.abs(todayDate.getTime() - lastDate.getTime());
       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays === 1) {
+        // Consecutive day
         newStreak = (preferences.currentStreak || 0) + 1;
       } else {
+        // Streak broken, start over
         newStreak = 1;
       }
     }
@@ -407,7 +403,15 @@ export default function App() {
 
   // --- Data Listeners ---
   useEffect(() => {
-    if (!user || !isAuthReady) return;
+    if (!user || !isAuthReady) {
+      setEntries([]);
+      setMoods([]);
+      setTasks([]);
+      setPreferences(null);
+      setSavedInspirations([]);
+      setMemories([]);
+      return;
+    }
 
     const qEntries = query(collection(db, 'journalEntries'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
     const qMoods = query(collection(db, 'moodLogs'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
