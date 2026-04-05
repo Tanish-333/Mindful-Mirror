@@ -338,6 +338,8 @@ export default function App() {
   }, [preferences?.notificationsEnabled, lastNotifiedDay]);
 
   // --- Streak Management ---
+  // Note: Streak logic was updated to include more activity triggers (tasks, inspiration, AI analysis)
+  // to prevent "random" resets as requested by user (tanishdave333@gmail.com).
   useEffect(() => {
     if (!preferences || !user) return;
     
@@ -944,7 +946,7 @@ export default function App() {
                   quote={dailyQuote} 
                   loadingQuote={loadingQuote}
                   insights={aiInsights} 
-                  fetchInsights={fetchInsights} 
+                  fetchInsights={() => { fetchInsights(); updateStreak(); }} 
                   loadingInsights={loadingInsights} 
                   onOpenChat={() => setIsChatOpen(true)}
                   preferences={preferences}
@@ -953,8 +955,8 @@ export default function App() {
               )}
               {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} onActivity={updateStreak} />}
               {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} onActivity={updateStreak} onOpenChat={() => setIsChatOpen(true)} />}
-              {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} />}
-              {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} />}
+              {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} onActivity={updateStreak} />}
+              {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} onActivity={updateStreak} />}
               {activeTab === 'settings' && <SettingsView preferences={preferences} onLogout={handleLogout} user={user} />}
             </motion.div>
           </AnimatePresence>
@@ -2127,7 +2129,7 @@ function MoodView({ moods, userId, onActivity, onOpenChat }: { moods: MoodLog[];
   );
 }
 
-function TasksView({ tasks, userId, onOpenChat }: { tasks: Task[]; userId: string; onOpenChat: () => void }) {
+function TasksView({ tasks, userId, onOpenChat, onActivity }: { tasks: Task[]; userId: string; onOpenChat: () => void; onActivity: () => void }) {
   const [newTask, setNewTask] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [isAdding, setIsAdding] = useState(false);
@@ -2147,6 +2149,7 @@ function TasksView({ tasks, userId, onOpenChat }: { tasks: Task[]; userId: strin
         userId
       });
       setNewTask('');
+      onActivity();
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'tasks');
     } finally {
@@ -2159,6 +2162,9 @@ function TasksView({ tasks, userId, onOpenChat }: { tasks: Task[]; userId: strin
       await updateDoc(doc(db, 'tasks', task.id!), {
         completed: !task.completed
       });
+      if (!task.completed) {
+        onActivity();
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'tasks');
     }
@@ -2327,7 +2333,7 @@ function TasksView({ tasks, userId, onOpenChat }: { tasks: Task[]; userId: strin
   );
 }
 
-function InspirationView({ quote, saved, userId, onOpenChat }: { quote: any; saved: SavedInspiration[]; userId: string; onOpenChat: () => void }) {
+function InspirationView({ quote, saved, userId, onOpenChat, onActivity }: { quote: any; saved: SavedInspiration[]; userId: string; onOpenChat: () => void; onActivity: () => void }) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const isAlreadySaved = saved.some(s => s.quote === quote?.quote);
 
@@ -2353,6 +2359,7 @@ function InspirationView({ quote, saved, userId, onOpenChat }: { quote: any; sav
         savedAt: serverTimestamp(),
         userId
       });
+      onActivity();
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'savedInspirations');
     }

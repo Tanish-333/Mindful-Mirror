@@ -63,15 +63,20 @@
     },
     "UserPreference": {
       "title": "User Preference",
-      "description": "User-specific application settings.",
+      "description": "User-specific application settings and streak data.",
       "type": "object",
       "properties": {
         "theme": { "type": "string", "enum": ["light", "dark"], "description": "UI theme mode." },
         "colorTheme": { "type": "string", "description": "Custom color theme identifier." },
         "notificationsEnabled": { "type": "boolean", "description": "Whether notifications are active." },
+        "currentStreak": { "type": "integer", "description": "Current consecutive days of activity." },
+        "longestStreak": { "type": "integer", "description": "All-time highest streak." },
+        "lastActivityDate": { "type": "string", "description": "ISO date string (YYYY-MM-DD) of last activity." },
+        "lastResetDay": { "type": "string", "description": "ISO date string (YYYY-MM-DD) of last chat reset." },
+        "chatResetsToday": { "type": "integer", "description": "Number of chat messages sent today." },
         "userId": { "type": "string", "description": "The ID of the user." }
       },
-      "required": ["userId"]
+      "required": ["userId", "currentStreak", "longestStreak"]
     },
     "SavedInspiration": {
       "title": "Saved Inspiration",
