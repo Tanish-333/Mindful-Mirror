@@ -904,81 +904,30 @@ export default function App() {
               </div>
             </div>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile Actions (Settings/Logout) */}
             <div className="lg:hidden flex items-center gap-2">
               <button 
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 rounded-xl bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors"
-                aria-label="Toggle menu"
+                onClick={() => setActiveTab('settings')}
+                className={cn(
+                  "p-2 rounded-xl transition-colors",
+                  activeTab === 'settings' ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-[var(--muted)] text-[var(--foreground)]"
+                )}
               >
-                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                <Settings className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="p-2 rounded-xl bg-[var(--muted)] text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+                aria-label="Sign out"
+              >
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>
-
-          {/* Mobile Navigation Overlay */}
-          <AnimatePresence>
-            {isMobileMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="lg:hidden bg-[var(--card)] border-b border-[var(--border)] overflow-hidden"
-              >
-                <div className="flex flex-col p-4 gap-2">
-                  <MobileNavButton 
-                    active={activeTab === 'dashboard'} 
-                    onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }} 
-                    icon={<LayoutDashboard />} 
-                    label="Dashboard" 
-                  />
-                  <MobileNavButton 
-                    active={activeTab === 'journal'} 
-                    onClick={() => { setActiveTab('journal'); setIsMobileMenuOpen(false); }} 
-                    icon={<Book />} 
-                    label="Journal" 
-                  />
-                  <MobileNavButton 
-                    active={activeTab === 'mood'} 
-                    onClick={() => { setActiveTab('mood'); setIsMobileMenuOpen(false); }} 
-                    icon={<Smile />} 
-                    label="Mood" 
-                  />
-                  <MobileNavButton 
-                    active={activeTab === 'tasks'} 
-                    onClick={() => { setActiveTab('tasks'); setIsMobileMenuOpen(false); }} 
-                    icon={<CheckSquare />} 
-                    label="Tasks" 
-                  />
-                  <MobileNavButton 
-                    active={activeTab === 'inspiration'} 
-                    onClick={() => { setActiveTab('inspiration'); setIsMobileMenuOpen(false); }} 
-                    icon={<Quote />} 
-                    label="Inspiration" 
-                  />
-                  <MobileNavButton 
-                    active={activeTab === 'settings'} 
-                    onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }} 
-                    icon={<Settings />} 
-                    label="Settings" 
-                  />
-                  <div className="pt-2 mt-2 border-t border-[var(--border)]">
-                    <button 
-                      onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
-                      className="flex items-center gap-3 w-full p-4 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold uppercase tracking-widest text-xs transition-colors"
-                    >
-                      <LogOut className="w-5 h-5" />
-                      Sign Out
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8 overflow-y-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -1003,13 +952,24 @@ export default function App() {
                 />
               )}
               {activeTab === 'journal' && <JournalView entries={entries} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} onActivity={updateStreak} />}
-              {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} onActivity={updateStreak} />}
-              {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} />}
-              {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} />}
+              {activeTab === 'mood' && <MoodView moods={moods} userId={user.uid} onActivity={updateStreak} onOpenChat={() => setIsChatOpen(true)} />}
+              {activeTab === 'tasks' && <TasksView tasks={tasks} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} />}
+              {activeTab === 'inspiration' && <InspirationView quote={dailyQuote} saved={savedInspirations} userId={user.uid} onOpenChat={() => setIsChatOpen(true)} />}
               {activeTab === 'settings' && <SettingsView preferences={preferences} onLogout={handleLogout} user={user} />}
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* Mobile Bottom Navigation */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[var(--card)] border-t border-[var(--border)] px-2 py-3 z-[70] safe-area-bottom">
+          <div className="flex items-center justify-around max-w-md mx-auto">
+            <BottomNavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard />} label="Home" />
+            <BottomNavButton active={activeTab === 'journal'} onClick={() => setActiveTab('journal')} icon={<Book />} label="Journal" />
+            <BottomNavButton active={activeTab === 'mood'} onClick={() => setActiveTab('mood')} icon={<Smile />} label="Mood" />
+            <BottomNavButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare />} label="Tasks" />
+            <BottomNavButton active={activeTab === 'inspiration'} onClick={() => setActiveTab('inspiration')} icon={<Quote />} label="Inspo" />
+          </div>
+        </div>
       </div>
     </ErrorBoundary>
   );
@@ -1034,19 +994,27 @@ function NavButton({ active, onClick, icon, label }: { active: boolean; onClick:
   );
 }
 
-function MobileNavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+function BottomNavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-4 w-full p-4 rounded-xl transition-all",
+        "flex flex-col items-center justify-center gap-1 px-3 py-1 rounded-xl transition-all min-w-[64px]",
         active 
-          ? "bg-[var(--primary)] text-[var(--primary-foreground)] font-bold shadow-md" 
-          : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+          ? "text-[var(--primary)] scale-110" 
+          : "text-[var(--muted-foreground)]"
       )}
     >
-      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-6 h-6" })}
-      <span className="uppercase tracking-widest text-xs font-bold">{label}</span>
+      <div className={cn(
+        "p-1.5 rounded-lg transition-colors",
+        active ? "bg-[var(--primary)]/10" : "bg-transparent"
+      )}>
+        {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" })}
+      </div>
+      <span className={cn(
+        "text-[10px] font-bold uppercase tracking-tighter",
+        active ? "opacity-100" : "opacity-60"
+      )}>{label}</span>
     </button>
   );
 }
@@ -1151,12 +1119,12 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Overview</h1>
           <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">A summary of your recent wellness and productivity.</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button variant="outline" onClick={onOpenChat} className="gap-2 flex-1 md:flex-none py-5 md:py-2">
+        <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={onOpenChat} className="gap-2 py-5 md:py-2 text-[10px] md:text-sm font-bold uppercase tracking-widest">
             <MessageSquare className="w-4 h-4" />
-            Chat with Lumina
+            Chat
           </Button>
-          <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || (entries.length === 0 && moods.length === 0)} className="gap-2 flex-1 md:flex-none py-5 md:py-2 relative overflow-hidden">
+          <Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || (entries.length === 0 && moods.length === 0)} className="gap-2 py-5 md:py-2 relative overflow-hidden text-[10px] md:text-sm font-bold uppercase tracking-widest">
             <Sparkles className={cn("w-4 h-4", loadingInsights && "animate-spin")} />
             {loadingInsights ? "Analyzing..." : "AI Analysis"}
             {loadingInsights && (
@@ -1553,7 +1521,17 @@ function JournalView({ entries, userId, onOpenChat, onActivity }: { entries: Jou
                </span>
             </div>
           </div>
-          <div className="flex items-center justify-between md:justify-end gap-2 md:gap-4 w-full md:w-auto">
+          <div className="grid grid-cols-2 md:flex items-center justify-between md:justify-end gap-2 md:gap-4 w-full md:w-auto">
+            <div className="md:hidden col-span-2 flex items-center justify-center gap-2 mb-1">
+               <span className={cn(
+                 "text-[10px] flex items-center gap-1.5 transition-all uppercase tracking-widest font-bold",
+                 (saveStatus === 'saved' || saveStatus === 'already-saved') ? "text-green-500" : "text-[var(--muted-foreground)]"
+               )}>
+                  {saveStatus === 'saving' && <Clock className="w-3 h-3 animate-spin" />}
+                  {(saveStatus === 'saved' || saveStatus === 'already-saved') && <CheckSquare className="w-3 h-3" />}
+                  {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'already-saved' ? 'Saved' : saveStatus === 'saved' ? 'Saved' : 'Auto-saving'}
+               </span>
+            </div>
             <div className="hidden md:flex items-center gap-2 mr-4">
                <span className={cn(
                  "text-xs flex items-center gap-1.5 transition-all",
@@ -1561,20 +1539,20 @@ function JournalView({ entries, userId, onOpenChat, onActivity }: { entries: Jou
                )}>
                   {saveStatus === 'saving' && <Clock className="w-4 h-4 animate-spin" />}
                   {(saveStatus === 'saved' || saveStatus === 'already-saved') && <CheckSquare className="w-4 h-4" />}
-                  {saveStatus === 'saving' ? 'Saving' : saveStatus === 'already-saved' ? 'Already Saved' : saveStatus === 'saved' ? 'Saved' : 'Auto-saving'}
+                  {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'already-saved' ? 'Saved' : saveStatus === 'saved' ? 'Saved' : 'Auto-saving'}
                </span>
             </div>
-            <Button variant="ghost" onClick={() => setIsPreview(!isPreview)} className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
-              {isPreview ? 'Edit Mode' : 'Preview Mode'}
+            <Button variant="ghost" onClick={() => setIsPreview(!isPreview)} className="text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
+              {isPreview ? 'Edit Mode' : 'Preview'}
             </Button>
-            <Button onClick={handleSave} className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
+            <Button onClick={handleSave} className="text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2">
               Save Now
             </Button>
             <Button 
               variant="ghost" 
               onClick={handleDraft} 
               disabled={isDrafting || !currentEntry.content?.trim()}
-              className="flex-1 md:flex-none text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2 bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 text-[var(--primary)]"
+              className="col-span-2 md:col-span-1 text-[10px] md:text-xs uppercase tracking-widest font-bold py-4 md:py-2 bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 text-[var(--primary)]"
             >
               {isDrafting ? (
                 <>
@@ -1737,11 +1715,11 @@ function JournalView({ entries, userId, onOpenChat, onActivity }: { entries: Jou
           <h1 className="text-3xl font-bold">Journal</h1>
           <p className="text-[var(--muted-foreground)]">Your personal collection of thoughts.</p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
+        <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
           <Button 
             variant="outline" 
             onClick={onOpenChat} 
-            className="gap-2 flex-1 md:flex-none py-5 md:py-2"
+            className="gap-2 py-5 md:py-2 text-[10px] md:text-sm font-bold uppercase tracking-widest"
           >
             <MessageSquare className="w-4 h-4" />
             Chat
@@ -1750,10 +1728,10 @@ function JournalView({ entries, userId, onOpenChat, onActivity }: { entries: Jou
             variant="outline" 
             onClick={handleDeepAnalysis} 
             disabled={isDeepAnalyzing || entries.length < 3} 
-            className="gap-2 flex-1 md:flex-none py-5 md:py-2 relative overflow-hidden"
+            className="gap-2 py-5 md:py-2 relative overflow-hidden text-[10px] md:text-sm font-bold uppercase tracking-widest"
           >
             <Brain className={cn("w-4 h-4", isDeepAnalyzing && "animate-spin")} />
-            {isDeepAnalyzing ? "Analyzing Patterns..." : "Deep Analysis"}
+            {isDeepAnalyzing ? "Analyzing..." : "Deep AI"}
             {isDeepAnalyzing && (
               <motion.div 
                 className="absolute bottom-0 left-0 h-0.5 bg-[var(--primary)]"
@@ -1763,20 +1741,20 @@ function JournalView({ entries, userId, onOpenChat, onActivity }: { entries: Jou
               />
             )}
           </Button>
+          <Button onClick={handleNew} className="gap-2 py-5 md:py-2 text-[10px] md:text-sm font-bold uppercase tracking-widest">
+            <Plus className="w-5 h-5" />
+            New Entry
+          </Button>
           {entries.length > 0 && (
             <Button 
               variant="outline" 
               onClick={() => setShowDeleteAllConfirm(true)} 
-              className="gap-2 flex-1 md:flex-none py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"
+              className="gap-2 py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20 text-[10px] md:text-sm font-bold uppercase tracking-widest"
             >
               <Trash2 className="w-4 h-4" />
-              Delete All
+              Clear All
             </Button>
           )}
-          <Button onClick={handleNew} className="gap-2 flex-1 md:flex-none py-5 md:py-2">
-            <Plus className="w-5 h-5" />
-            New Entry
-          </Button>
         </div>
       </header>
 
@@ -1886,7 +1864,7 @@ function JournalView({ entries, userId, onOpenChat, onActivity }: { entries: Jou
 }
 
 
-function MoodView({ moods, userId, onActivity }: { moods: MoodLog[]; userId: string; onActivity: () => void }) {
+function MoodView({ moods, userId, onActivity, onOpenChat }: { moods: MoodLog[]; userId: string; onActivity: () => void; onOpenChat: () => void }) {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -1974,16 +1952,22 @@ function MoodView({ moods, userId, onActivity }: { moods: MoodLog[]; userId: str
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Mood Tracker</h1>
           <p className="text-[var(--muted-foreground)] mt-1 text-sm md:text-base">Reflect on your current emotional state.</p>
         </div>
-        {moods.length > 0 && (
-          <Button 
-            variant="outline" 
-            onClick={() => setShowDeleteAllConfirm(true)} 
-            className="gap-2 w-full md:w-auto py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete All
+        <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={onOpenChat} className="gap-2 py-5 md:py-2 text-[10px] md:text-sm font-bold uppercase tracking-widest">
+            <MessageSquare className="w-4 h-4" />
+            Chat
           </Button>
-        )}
+          {moods.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDeleteAllConfirm(true)} 
+              className="gap-2 py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20 text-[10px] md:text-sm font-bold uppercase tracking-widest"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear All
+            </Button>
+          )}
+        </div>
       </header>
 
       <AnimatePresence>
@@ -2143,7 +2127,7 @@ function MoodView({ moods, userId, onActivity }: { moods: MoodLog[]; userId: str
   );
 }
 
-function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
+function TasksView({ tasks, userId, onOpenChat }: { tasks: Task[]; userId: string; onOpenChat: () => void }) {
   const [newTask, setNewTask] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [isAdding, setIsAdding] = useState(false);
@@ -2214,16 +2198,22 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
           <h1 className="text-3xl font-bold">Productivity Hub</h1>
           <p className="text-[var(--muted-foreground)] text-sm md:text-base">Stay organized and focused on your goals.</p>
         </div>
-        {tasks.length > 0 && (
-          <Button 
-            variant="outline" 
-            onClick={() => setShowDeleteAllConfirm(true)} 
-            className="gap-2 w-full md:w-auto py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete All
+        <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={onOpenChat} className="gap-2 py-5 md:py-2 text-[10px] md:text-sm font-bold uppercase tracking-widest">
+            <MessageSquare className="w-4 h-4" />
+            Chat
           </Button>
-        )}
+          {tasks.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDeleteAllConfirm(true)} 
+              className="gap-2 py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20 text-[10px] md:text-sm font-bold uppercase tracking-widest"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear All
+            </Button>
+          )}
+        </div>
       </header>
 
       <AnimatePresence>
@@ -2337,7 +2327,7 @@ function TasksView({ tasks, userId }: { tasks: Task[]; userId: string }) {
   );
 }
 
-function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedInspiration[]; userId: string }) {
+function InspirationView({ quote, saved, userId, onOpenChat }: { quote: any; saved: SavedInspiration[]; userId: string; onOpenChat: () => void }) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const isAlreadySaved = saved.some(s => s.quote === quote?.quote);
 
@@ -2390,16 +2380,22 @@ function InspirationView({ quote, saved, userId }: { quote: any; saved: SavedIns
           <h1 className="text-3xl font-bold">Inspiration</h1>
           <p className="text-[var(--muted-foreground)]">Daily wisdom to fuel your journey.</p>
         </div>
-        {saved.length > 0 && (
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setShowClearConfirm(true)}
-            className="text-[10px] uppercase tracking-widest font-bold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30 w-full md:w-auto py-4 md:py-2"
-          >
-            Clear All
+        <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={onOpenChat} className="gap-2 py-5 md:py-2 text-[10px] md:text-sm font-bold uppercase tracking-widest">
+            <MessageSquare className="w-4 h-4" />
+            Chat
           </Button>
-        )}
+          {saved.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => setShowClearConfirm(true)}
+              className="gap-2 py-5 md:py-2 text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-900/20 text-[10px] md:text-sm font-bold uppercase tracking-widest"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear All
+            </Button>
+          )}
+        </div>
       </header>
 
       <AnimatePresence>
