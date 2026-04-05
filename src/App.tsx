@@ -308,6 +308,7 @@ export default function App() {
   // --- Daily Notification & Reset Check ---
   useEffect(() => {
     if (!preferences?.notificationsEnabled) return;
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
 
     // Request notification permission
     if (Notification.permission === 'default') {
