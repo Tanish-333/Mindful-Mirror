@@ -30,7 +30,9 @@ import {
   User,
   deleteUser,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence
 } from 'firebase/auth';
 import { 
   Book, 
@@ -269,8 +271,19 @@ export default function App() {
 
   // --- Auth & Initial Setup ---
   useEffect(() => {
-    // Set persistence to local for better reliability
-    setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence error:", err));
+    // Set persistence to local for better reliability, but fallback for Safari private mode
+    const setAuthPersistence = async () => {
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (err) {
+        try {
+          await setPersistence(auth, browserSessionPersistence);
+        } catch (sessionErr) {
+          await setPersistence(auth, inMemoryPersistence).catch(e => console.error("Persistence error:", e));
+        }
+      }
+    };
+    setAuthPersistence();
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
