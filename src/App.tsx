@@ -1103,6 +1103,31 @@ function AboutModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   );
 }
 
+function AdBanner({ slot, label = "Advertisement" }: { slot: string; label?: string }) {
+  useEffect(() => {
+    try {
+      // @ts-ignore
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (e) {
+      // Ad blockers or script not loaded
+    }
+  }, []);
+
+  return (
+    <div className="mt-8 pt-8 border-t border-[var(--border)]">
+      <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[var(--muted-foreground)] mb-3 text-center opacity-50">{label}</p>
+      <div className="bg-[var(--muted)]/20 rounded-2xl border border-[var(--border)] min-h-[100px] flex items-center justify-center overflow-hidden">
+        <ins className="adsbygoogle"
+             style={{ display: 'block', width: '100%' }}
+             data-ad-client="ca-pub-5275893575064484"
+             data-ad-slot={slot}
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetchInsights, loadingInsights, onOpenChat, preferences, isStreakDoneToday }: any) {
   const moodData = moods.slice(0, 15).reverse().map((m: any) => ({
     date: format(m.createdAt?.toDate() || new Date(), 'MMM d'),
@@ -1340,6 +1365,9 @@ function Dashboard({ entries, moods, tasks, quote, loadingQuote, insights, fetch
           )}
         </Card>
       </div>
+
+      {/* Ad Banner */}
+      <AdBanner slot="YOUR_AD_SLOT_ID_HERE" />
     </div>
   );
 }
